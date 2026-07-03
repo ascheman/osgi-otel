@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>net.aschemann.otel</groupId>
+        <artifactId>osgi-otel-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>osgi-otel-test-bundle</artifactId>
+    <packaging>bundle</packaging>
+    <name>OSGi OpenTelemetry Test Bundle</name>
+    <description>
+        Minimal OSGi bundle used by integration tests to exercise the
+        instrumented BundleContext.getService call.
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.osgi</groupId>
+            <artifactId>org.osgi.core</artifactId>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.felix</groupId>
+                <artifactId>maven-bundle-plugin</artifactId>
+                <configuration>
+                    <instructions>
+                        <Bundle-SymbolicName>net.aschemann.otel.osgi.testbundle</Bundle-SymbolicName>
+                        <Bundle-Name>OSGi OTel Test Bundle</Bundle-Name>
+                        <Bundle-Activator>net.aschemann.otel.osgi.testbundle.Activator</Bundle-Activator>
+                        <Export-Package>net.aschemann.otel.osgi.testbundle.api</Export-Package>
+                        <Private-Package>net.aschemann.otel.osgi.testbundle,net.aschemann.otel.osgi.testbundle.internal</Private-Package>
+                    </instructions>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

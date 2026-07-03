@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>net.aschemann.otel</groupId>
+        <artifactId>osgi-otel-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>osgi-otel-it</artifactId>
+    <name>OSGi OpenTelemetry Extension - Integration Tests</name>
+    <description>
+        Integration tests that start an embedded Equinox framework with the
+        OpenTelemetry agent-for-testing attached, install the test bundle,
+        exercise the instrumented BundleContext.getService call, and assert
+        that spans are captured.
+    </description>
+
+    <properties>
+        <equinox.version>3.15.300</equinox.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.eclipse.platform</groupId>
+            <artifactId>org.eclipse.osgi</artifactId>
+            <version>${equinox.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.opentelemetry.javaagent</groupId>
+            <artifactId>opentelemetry-agent-for-testing</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry.javaagent</groupId>
+            <artifactId>opentelemetry-testing-common</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-testing</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- These are not classpath dependencies (the IT loads them as files),
+             but listing them makes Maven build the modules first. -->
+        <dependency>
+            <groupId>net.aschemann.otel</groupId>
+            <artifactId>osgi-otel-extension</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>net.aschemann.otel</groupId>
+            <artifactId>osgi-otel-test-bundle</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-agent-and-extension</id>
+                        <phase>process-test-resources</phase>
+                        <goals>
+                            <goal>copy</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>io.opentelemetry.javaagent</groupId>
+                                    <artifactId>opentelemetry-agent-for-testing</artifactId>
+                                    <version>${otel.instrumentation.alpha.version}</version>
+                                    <destFileName>opentelemetry-agent-for-testing.jar</destFileName>
+                                </artifactItem>
+                                <artifactItem>
+                                    <groupId>net.aschemann.otel</groupId>
+                                    <artifactId>osgi-otel-extension</artifactId>
+                                    <version>${project.version}</version>
+                                    <destFileName>osgi-otel-extension.jar</destFileName>
+                                </artifactItem>
+                                <artifactItem>
+                                    <groupId>net.aschemann.otel</groupId>
+                                    <artifactId>osgi-otel-test-bundle</artifactId>
+                                    <version>${project.version}</version>
+                                    <destFileName>osgi-otel-test-bundle.jar</destFileName>
+                                </artifactItem>
+                            </artifactItems>
+                            <outputDirectory>${project.build.directory}/agents</outputDirectory>
+                            <stripVersion>true</stripVersion>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <argLine>
+                        -javaagent:${project.build.directory}/agents/opentelemetry-agent-for-testing.jar
+                        -Dotel.javaagent.extensions=${project.build.directory}/agents/osgi-otel-extension.jar
+                        -Dotel.javaagent.debug=false
+                        -Dotel.metrics.exporter=none
+                        -Dotel.logs.exporter=none
+                        -Dotel.traces.exporter=none
+                    </argLine>
+                    <systemPropertyVariables>
+                        <test.bundle.path>${project.build.directory}/agents/osgi-otel-test-bundle.jar</test.bundle.path>
+                    </systemPropertyVariables>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

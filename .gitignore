@@ -1,0 +1,30 @@
+target/
+*.class
+*.jar
+!**/src/**/*.jar
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+.factorypath
+bin/
+out/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+hs_err_pid*.log
+replay_pid*.log
+
+# Captured OTel traces
+traces.jsonl
+*.jsonl

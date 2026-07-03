@@ -1,0 +1,87 @@
+# CLAUDE.md
+
+Guidance for Claude Code when working in this repository.
+
+## What this is
+
+`osgi-otel` is an **OpenTelemetry Java Agent extension** that emits spans for
+**OSGi inter-bundle data flow**. Currently it instruments
+`BundleContext.getService(ServiceReference)` and tags each span with the caller
+bundle, provider bundle, and service interface.
+
+Driving use-case: observing data flow between bundles in Eclipse RCP / Equinox
+applications (Mylyn). The extension itself is plain OSGi — no Eclipse-specific
+APIs. Status: very early v1. See `README.adoc` for the user-facing docs and the
+roadmap.
+
+## Modules (Maven reactor)
+
+Parent: `net.aschemann.otel:osgi-otel-parent:0.1.0-SNAPSHOT` (root `pom.xml`).
+
+| Module | Purpose |
+|---|---|
+| `osgi-otel-extension` | The agent extension: `InstrumentationModule` + `TypeInstrumentation` + Byte Buddy `Advice` + `BundleSpanFilter`. |
+| `osgi-otel-file-exporter` | `SpanExporter` writing OTLP-shaped JSON Lines to a file (`-Dotel.traces.exporter=file`). |
+| `osgi-otel-test-bundle` | Minimal OSGi bundle (`packaging=bundle`, Felix bundle plugin) providing `HelloService`; used by the IT. |
+| `osgi-otel-it` | Failsafe IT: starts embedded Equinox 3.15.300 with `agent-for-testing`, installs the test bundle, calls `getService`, asserts the span. |
+
+## Build, test, run
+
+```bash
+mvn -B verify                 # full build + integration test (the CI command)
+mvn -B install -DskipTests    # build, then assemble dist/ (see README "Quick start")
+samples/run-with-otel.template.sh   # generic launcher; set OSGI_OTEL_APP_LAUNCHER
+samples/run-mylyn-with-otel.sh      # worked Eclipse/Mylyn example
+```
+
+`samples/` holds the launcher scripts (generic template + Mylyn example) and
+`samples/README.adoc`. The extension itself is configured only via `-D` system
+properties (`otel.*`, `osgi.filter.*`); the `OSGI_OTEL_*` env vars are a
+launcher-script convenience and all optional.
+
+- CI (`.github/workflows/build.yml`) runs `mvn -B verify` on **JDK 21 (Temurin)**.
+- Deploy: the `github` profile auto-activates when `GITHUB_TOKEN` is set (also
+  needs `GITHUB_LOGIN`), publishing all four modules to GitHub Packages at
+  `maven.pkg.github.com/ascheman/osgi-otel`.
+
+## Architecture & conventions — read before editing
+
+- **Java 8 bytecode.** `maven.compiler.source/target = 1.8`. The extension advice
+  is injected into arbitrary host applications, so it must stay Java-8-compatible
+  even though CI compiles on JDK 21. Do not use newer language/API features in
+  `osgi-otel-extension`.
+- **`provided` scope everywhere in the extension.** The OTel agent and OSGi APIs
+  are supplied at runtime by the agent/host. Adding `compile`/runtime deps to the
+  extension is almost always wrong.
+- **SPI via AutoService.** `@AutoService` generates the `META-INF/services` files
+  for `InstrumentationModule` and `ConfigurableSpanExporterProvider`. The
+  `auto-service` annotation-processor path is wired in each module's
+  `maven-compiler-plugin` config — keep it when touching those poms.
+- **The IT loads jars as files, not on the classpath.** `maven-dependency-plugin`
+  copies the agent-for-testing, extension, and test-bundle jars into
+  `target/agents/`; failsafe attaches them via `-javaagent` /
+  `-Dotel.javaagent.extensions` / `test.bundle.path`. Changing artifactIds or the
+  copy step breaks the IT.
+- **Span attributes** are `osgi.caller.bundle`, `osgi.provider.bundle`,
+  `osgi.service.class`. `traces.jsonl` and the README `jq` recipes depend on these
+  exact keys — rename in lockstep.
+- **Filter config is read once at class-load time** (`BundleSpanFilter`, system
+  properties `osgi.filter.cross-bundle-only` / `.bundle.include` / `.bundle.exclude`).
+  A JVM restart is required to change it; there is no live reconfiguration.
+- **Two distinct env-var namespaces.** Launcher-script variables are prefixed
+  `OSGI_OTEL_` deliberately, to avoid collisions with the OTel SDK's own `OTEL_*`
+  / `otel.*` properties. Keep them separate.
+- **License header** (Apache 2.0, "Copyright 2026 Gerd Aschemann") goes on every
+  Java file — match the existing 4-line header.
+- `README.adoc` is AsciiDoc: one sentence per line, `*`/`**` lists, `[source,…]`
+  blocks — not Markdown.
+
+## Git
+
+- **No commits exist yet** — the whole tree is still untracked. First commit will
+  establish history.
+- This is a **personal** project (`net.aschemann.otel`). Commit author is
+  **Gerd Aschemann <gerd@aschemann.net>** (matches `<developers>` in the parent
+  pom) — *not* the Apache identity used for jQAssistant/Maven work.
+- **Never commit or push without an explicit "Go".** Stage, show the diff, wait
+  for approval.

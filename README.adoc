@@ -1,0 +1,492 @@
+= osgi-otel: OpenTelemetry Java Agent Extension for OSGi
+:toc:
+:toc-placement: preamble
+:icons: font
+:source-highlighter: rouge
+
+OpenTelemetry Java Agent extension that emits spans for OSGi inter-bundle data flow.
+Currently instruments `BundleContext.getService(ServiceReference)` and tags each span with caller bundle, provider bundle, and service interface.
+
+The driving use-case is observing data flow between bundles in Eclipse RCP applications (Mylyn, Equinox-based products).
+The extension itself is plain OSGi and does not depend on Eclipse-specific APIs.
+
+== Status
+
+Very early v1.
+
+* `BundleContext.getService` instrumented (single instrumentation module)
+* File-based JSON-Lines exporter (no Jaeger/OTLP back end required)
+* Optional bundle-name regex filter (cross-bundle-only / include / exclude)
+* Embedded-Equinox integration test, runs in CI
+
+NOTE: Roadmap items at the end of this file.
+
+== Modules
+
+[cols="1,3"]
+|===
+|Module |Purpose
+
+|`osgi-otel-extension`
+|The OTel Java Agent extension itself.
+Contains `InstrumentationModule`, `TypeInstrumentation`, advice and the bundle filter.
+
+|`osgi-otel-file-exporter`
+|`SpanExporter` that writes OTLP-shaped JSON Lines to a file (`-Dotel.traces.exporter=file`).
+
+|`osgi-otel-test-bundle`
+|Minimal OSGi bundle used by the IT to exercise `BundleContext.getService`.
+
+|`osgi-otel-it`
+|Integration test: starts an embedded Equinox 3.15.300, attaches `agent-for-testing`, verifies spans.
+|===
+
+== Quick start
+
+. Build everything and assemble `dist/` (agent + both extension JARs):
++
+[source,bash]
+----
+mvn -B install -DskipTests
+mvn -B dependency:copy \
+  -Dartifact=io.opentelemetry.javaagent:opentelemetry-javaagent:2.27.0 \
+  -DoutputDirectory=dist -Dmdep.stripVersion=true
+cp osgi-otel-extension/target/osgi-otel-extension-0.1.0-SNAPSHOT.jar dist/
+cp osgi-otel-file-exporter/target/osgi-otel-file-exporter-0.1.0-SNAPSHOT.jar dist/
+----
+
+. Attach the agent to your application.
+See <<Installing into your own OSGi application>> for the generic recipe, or copy a ready-made launcher from `samples/` (see <<Samples>>).
+The default `file` exporter writes one JSON object per span to `traces.jsonl`.
+
+. Inspect the file:
++
+[source,bash]
+----
+wc -l traces.jsonl
+jq -r '.attributes["osgi.service.class"]' traces.jsonl | sort | uniq -c | sort -rn | head
+----
+
+== Configuration
+
+The extension and the file exporter are configured entirely through JVM system properties (`-D...`).
+Nothing is mandatory beyond what every OpenTelemetry agent needs (`-javaagent` and `-Dotel.javaagent.extensions`); every property below has a default.
+
+[cols="2,1,3"]
+|===
+|System property |Default |Purpose
+
+|`otel.service.name`
+|`unknown_service:java`
+|Logical name of the *whole application* (the standard OTel `service.name` resource attribute; what Jaeger groups traces by).
+Not to be confused with an OSGi _service_ - those appear per span in `osgi.service.class`.
+
+|`otel.traces.exporter`
+|`otlp` (agent default)
+|Set to `file` for the bundled JSON-Lines exporter; also `otlp`, `logging-otlp`, `logging`.
+
+|`otel.exporter.file.path`
+|`traces.jsonl`
+|Output file for `otel.traces.exporter=file` (resolved against the working directory).
+
+|`otel.exporter.file.append`
+|`true`
+|`false` truncates the file on each start.
+
+|`otel.exporter.otlp.endpoint`
+|agent default
+|OTLP collector endpoint; use the HTTP port (e.g. `http://localhost:4318`) for `otel.traces.exporter=otlp`.
+
+|`osgi.filter.cross-bundle-only`
+|`false`
+|`true` drops spans where caller and provider are the same bundle.
+
+|`osgi.filter.bundle.include`
+|unset
+|Java regex.
+Span emitted only if caller OR provider matches.
+
+|`osgi.filter.bundle.exclude`
+|unset
+|Java regex.
+Span dropped only if caller AND provider both match.
+|===
+
+NOTE: The `osgi.filter.*` properties are read once at extension load time, so a JVM restart is required to change them.
+
+The launcher scripts under `samples/` wrap these properties behind convenience `OSGI_OTEL_*` environment variables (all optional) - see `samples/README.adoc`.
+
+== Bundle filter examples
+
+These are the system properties; the `samples/` scripts expose the same behaviour via `OSGI_OTEL_FILTER_*` environment variables.
+Replace `com.example` with your application's bundle-symbolic-name prefix.
+
+[source,bash]
+----
+# Only cross-bundle calls (the typical "I want to see data flow" filter)
+-Dosgi.filter.cross-bundle-only=true
+
+# Anything involving your own bundles (caller or provider matches)
+-Dosgi.filter.bundle.include='^com\.example\..*'
+
+# Drop pure Equinox-internal noise; keep osgi-to-userbundle calls
+-Dosgi.filter.bundle.exclude='^org\.eclipse\.osgi$'
+
+# Combine: only your-bundle-involved cross-bundle calls
+-Dosgi.filter.cross-bundle-only=true -Dosgi.filter.bundle.include='^com\.example\..*'
+----
+
+The filter is applied _before_ the span is created, so excluded calls cost essentially nothing.
+
+== Exporter modes
+
+file:: Default of the bundled exporter.
+Writes OTLP-shaped JSON (one object per line) to `otel.exporter.file.path`.
+No back end required, easy to grep/jq, suitable for offline analysis.
+
+otlp:: Sends via OTLP HTTP to a Jaeger or other OTLP collector.
+Start Jaeger first:
++
+[source,bash]
+----
+docker run -d --rm --name jaeger \
+  -p 16686:16686 -p 4317:4317 -p 4318:4318 \
+  jaegertracing/all-in-one:latest
+----
++
+UI at http://localhost:16686; look for your `otel.service.name`.
+
+logging-otlp:: OpenTelemetry's built-in OTLP-JSON-to-stdout exporter.
+Useful if you want to pipe everything yourself, but the output is mixed with the application's own logs.
+
+logging:: Same as `logging-otlp` but with a human-readable text format.
+
+== Installing into your own OSGi application
+
+This is the generic recipe.
+The scripts under `samples/` are just convenience wrappers around exactly these steps (see <<Samples>>).
+
+Tracing is attached at JVM start via the OpenTelemetry Java Agent - there is nothing to install _inside_ your OSGi framework, no bundle to deploy, and no code change.
+You need three JAR files on disk and a handful of `-D` system properties.
+
+NOTE: Everything here runs on *Java 8 or newer*.
+The OpenTelemetry Java Agent 2.x supports a Java 8+ runtime; this extension is compiled to Java 8 bytecode.
+
+=== Step 1: Obtain the three JARs
+
+[cols="2,1,3"]
+|===
+|Artifact |From |Role
+
+|`io.opentelemetry.javaagent:opentelemetry-javaagent:2.27.0`
+|Maven Central
+|The agent itself (the `-javaagent`).
+
+|`net.aschemann.otel:osgi-otel-extension:0.1.0-SNAPSHOT`
+|GitHub Packages
+|The OSGi instrumentation.
+
+|`net.aschemann.otel:osgi-otel-file-exporter:0.1.0-SNAPSHOT`
+|GitHub Packages
+|The JSON-Lines file exporter.
+|===
+
+You do *not* need to clone this repository to consume the packages.
+
+GitHub Packages, however, requires authentication even for reads of public Maven packages.
+You authenticate as *yourself*: any GitHub account with a personal access token works - it does *not* have to be the package owner, and no shared/maintainer credentials are involved.
+Configure your own token *once* in your personal `~/.m2/settings.xml` (not the `settings.xml` in this repo, which only serves the maintainer's deploy):
+
+[source,xml]
+----
+<!-- ~/.m2/settings.xml -->
+<settings>
+  <servers>
+    <server>
+      <!-- id must match the repository id on the command line below -->
+      <id>github-osgi-otel</id>
+      <username>your-github-user</username>
+      <!-- personal access token with the read:packages scope -->
+      <password>ghp_...</password>
+    </server>
+  </servers>
+</settings>
+----
+
+Then download the three JARs - no `-s`, no repo checkout:
+
+[source,bash]
+----
+mkdir -p otel-libs
+
+# The agent comes from Maven Central (no auth needed)
+mvn dependency:copy -Dmdep.stripVersion=true -DoutputDirectory=otel-libs \#<1>
+  -Dartifact=io.opentelemetry.javaagent:opentelemetry-javaagent:2.27.0
+
+# The two extensions come from GitHub Packages (repo id = server id above)
+mvn dependency:copy -Dmdep.stripVersion=true -DoutputDirectory=otel-libs \#<2>
+  -DremoteRepositories=github-osgi-otel::::https://maven.pkg.github.com/ascheman/osgi-otel \
+  -Dartifact=net.aschemann.otel:osgi-otel-extension:0.1.0-SNAPSHOT
+mvn dependency:copy -Dmdep.stripVersion=true -DoutputDirectory=otel-libs \#<3>
+  -DremoteRepositories=github-osgi-otel::::https://maven.pkg.github.com/ascheman/osgi-otel \
+  -Dartifact=net.aschemann.otel:osgi-otel-file-exporter:0.1.0-SNAPSHOT
+----
+<1> Downloads `opentelemetry-javaagent.jar`.
+<2> Downloads `osgi-otel-extension.jar`.
+<3> Downloads `osgi-otel-file-exporter.jar`.
+
+TIP: If you built this project yourself (`mvn -B install`), the two extension JARs are already in your local `~/.m2` and you can drop the `-DremoteRepositories=...` argument entirely.
+
+==== Alternative: Download with curl (no Maven)
+
+GitHub Packages is a plain Maven-layout HTTPS repo, so `curl` works too (same token, Basic auth).
+The agent comes from Maven Central without a token:
+
+[source,bash]
+----
+curl -L -o otel-libs/opentelemetry-javaagent.jar \
+  https://repo1.maven.org/maven2/io/opentelemetry/javaagent/opentelemetry-javaagent/2.27.0/opentelemetry-javaagent-2.27.0.jar
+----
+
+For a released (non-snapshot) version the address is deterministic:
+
+[source,bash]
+----
+curl -Lfu "$GITHUB_LOGIN:$GITHUB_TOKEN" -o otel-libs/osgi-otel-extension.jar \
+  https://maven.pkg.github.com/ascheman/osgi-otel/net/aschemann/otel/osgi-otel-extension/0.1.0/osgi-otel-extension-0.1.0.jar
+----
+
+For a `-SNAPSHOT` the real filename is timestamped, so read it from `maven-metadata.xml` first:
+
+[source,bash]
+----
+BASE=https://maven.pkg.github.com/ascheman/osgi-otel/net/aschemann/otel/osgi-otel-extension/0.1.0-SNAPSHOT
+VER=$(curl -sfu "$GITHUB_LOGIN:$GITHUB_TOKEN" "$BASE/maven-metadata.xml" \
+        | grep -oE '<value>[^<]+</value>' | tail -1 | sed -E 's/<[^>]+>//g')
+curl -Lfu "$GITHUB_LOGIN:$GITHUB_TOKEN" -o otel-libs/osgi-otel-extension.jar \
+  "$BASE/osgi-otel-extension-${VER}.jar"
+----
+
+For snapshots `mvn dependency:copy` is simpler (it resolves the timestamp itself); for a fixed release `curl` is a lighter option.
+
+NOTE: GitHub Packages never allows anonymous Maven reads (only its Container registry does); for token-free consumption later, mirror the artifacts to Maven Central or a service like JitPack.
+
+=== Step 2: Decide where the JARs live
+
+The directory does not matter - the agent loads them by absolute (or launcher-relative) path.
+Any location the JVM process can read works: a sibling `otel-libs/` folder, `dropins/`, or a fixed system path.
+The extensions are *not* OSGi bundles from the framework's point of view; they live entirely inside the agent's isolated class loader.
+
+=== Step 3: Add the JVM system properties
+
+Append these to the JVM command line (adjust the three paths):
+
+[source,bash]
+----
+-javaagent:/path/to/otel-libs/opentelemetry-javaagent.jar
+-Dotel.javaagent.extensions=/path/to/otel-libs/osgi-otel-extension.jar,/path/to/otel-libs/osgi-otel-file-exporter.jar
+-Dotel.service.name=my-osgi-app
+-Dotel.traces.exporter=file
+-Dotel.exporter.file.path=/path/to/traces.jsonl
+-Dotel.exporter.file.append=true
+-Dotel.metrics.exporter=none
+-Dotel.logs.exporter=none
+----
+
+Both extension JARs are passed to `-Dotel.javaagent.extensions` as a single comma-separated value.
+Disabling the metrics and logs exporters keeps the agent from complaining about missing OTLP endpoints.
+
+=== Step 3 (variant): Where exactly to put them per launcher
+
+Plain `java` launcher::
+Put the arguments on the command line (or in `JAVA_TOOL_OPTIONS` / `JAVA_OPTS`) *before* `-jar` / the main class.
+
+Bare Equinox (`java -jar org.eclipse.osgi.jar`)::
+Same - the `-javaagent` and `-D...` arguments go before `-jar`.
+
+Eclipse / Equinox product (`eclipse.ini`)::
+Append them *after* the `-vmargs` line (which must be the last section of the file); everything below `-vmargs` is handed to the JVM verbatim.
+
+=== Step 4 (optional): Send to Jaeger instead of a file
+
+Swap the three `file` exporter properties for OTLP and start a collector:
+
+[source,bash]
+----
+docker run -d --rm --name jaeger \#<1>
+  -p 16686:16686 -p 4317:4317 -p 4318:4318 \
+  jaegertracing/all-in-one:latest
+----
+<1> Jaeger UI at http://localhost:16686.
+
+[source,bash]
+----
+-Dotel.traces.exporter=otlp
+-Dotel.exporter.otlp.endpoint=http://localhost:4318
+----
+
+=== Step 5 (optional): Reduce noise with bundle filters
+
+The same filter system properties work here directly (replace `com.example` with your bundle prefix):
+
+[source,bash]
+----
+-Dosgi.filter.cross-bundle-only=true
+-Dosgi.filter.bundle.include=^com\.example\..*
+-Dosgi.filter.bundle.exclude=^org\.eclipse\.osgi$
+----
+
+See <<Bundle filter examples>> for what each one does.
+
+== Samples
+
+The `samples/` directory contains ready-to-copy launcher scripts.
+Every `OSGI_OTEL_*` variable they read is optional and has a default; see `samples/README.adoc` for the full list.
+
+`samples/run-with-otel.template.sh`::
+Application-agnostic template.
+Set `OSGI_OTEL_APP_LAUNCHER` (and, for an Eclipse product, `OSGI_OTEL_LAUNCH_STYLE=eclipse-vmargs`), then run it against any OSGi/JVM application.
+
+`samples/run-mylyn-with-otel.sh`::
+A fully worked, Eclipse/Mylyn-specific example - the reference for how to adapt the template to a real product launcher.
+
+== Analyzing traces with jq
+
+All examples assume `traces.jsonl` in the current directory.
+
+=== Top-N most-queried services
+
+[source,bash]
+----
+jq -r '.attributes["osgi.service.class"] // "n/a"' traces.jsonl \
+  | sort | uniq -c | sort -rn | head -20
+----
+
+=== Top callers and providers
+
+[source,bash]
+----
+echo "Top callers:"
+jq -r '.attributes["osgi.caller.bundle"] // "n/a"' traces.jsonl \
+  | sort | uniq -c | sort -rn | head
+
+echo "Top providers:"
+jq -r '.attributes["osgi.provider.bundle"] // "n/a"' traces.jsonl \
+  | sort | uniq -c | sort -rn | head
+----
+
+=== Cross-bundle calls only (post-hoc filter)
+
+[source,bash]
+----
+jq -c 'select(.attributes["osgi.caller.bundle"]
+            != .attributes["osgi.provider.bundle"])
+       | {caller:   .attributes["osgi.caller.bundle"],
+          provider: .attributes["osgi.provider.bundle"],
+          service:  .attributes["osgi.service.class"]}' traces.jsonl \
+  | sort -u
+----
+
+=== Edge list for a Mermaid/Graphviz diagram
+
+[source,bash]
+----
+jq -r 'select(.attributes["osgi.caller.bundle"]
+            != .attributes["osgi.provider.bundle"])
+       | "\(.attributes["osgi.caller.bundle"]) -> \(.attributes["osgi.provider.bundle"])"' \
+  traces.jsonl | sort -u
+----
+
+Pipe this into Graphviz directly:
+
+[source,bash]
+----
+{
+  echo 'digraph osgi { rankdir=LR;'
+  jq -r 'select(.attributes["osgi.caller.bundle"]
+              != .attributes["osgi.provider.bundle"])
+         | "\"\(.attributes["osgi.caller.bundle"])\" -> \"\(.attributes["osgi.provider.bundle"])\";"' \
+    traces.jsonl | sort -u
+  echo '}'
+} | dot -Tsvg > bundle-graph.svg
+----
+
+=== Service-class fan-in (which bundles consume a given service?)
+
+[source,bash]
+----
+SERVICE='org.osgi.service.event.EventHandler'
+jq -r --arg s "$SERVICE" \
+  'select(.attributes["osgi.service.class"] == $s)
+   | .attributes["osgi.caller.bundle"]' traces.jsonl \
+  | sort | uniq -c | sort -rn
+----
+
+=== All spans involving a specific bundle (as caller or provider)
+
+[source,bash]
+----
+BUNDLE='com.example.myapp.core'
+jq -c --arg b "$BUNDLE" \
+  'select(.attributes["osgi.caller.bundle"]   == $b
+       or .attributes["osgi.provider.bundle"] == $b)' traces.jsonl
+----
+
+=== Span timing summary (microseconds)
+
+[source,bash]
+----
+jq -r '"\((.end_unix_nano - .start_unix_nano) / 1000)\t\(.name)"' traces.jsonl \
+  | sort -rn | head -20
+----
+
+=== Quick sanity check of the file
+
+[source,bash]
+----
+echo "Total spans:    $(wc -l < traces.jsonl)"
+echo "Distinct trace IDs: $(jq -r .trace_id traces.jsonl | sort -u | wc -l)"
+echo "Distinct services:  $(jq -r '.attributes["osgi.service.class"] // empty' traces.jsonl | sort -u | wc -l)"
+----
+
+== Building and testing
+
+[source,bash]
+----
+mvn -B verify
+----
+
+Runs unit tests (none yet) and the integration test in `osgi-otel-it`.
+The IT starts an embedded Equinox 3.15.300 with the OpenTelemetry `agent-for-testing` attached, installs the test bundle, calls `BundleContext.getService`, and asserts that the expected span was captured.
+
+== Deployment
+
+This is for the *maintainer* (or CI); consumers only download, see <<Installing into your own OSGi application>>.
+
+The parent POM declares a `github` profile for publishing snapshot artifacts to GitHub Packages.
+The profile activates automatically when `GITHUB_TOKEN` is set.
+The repo's own `settings.xml` supplies the `github` server credentials from the same environment variables:
+
+[source,bash]
+----
+export GITHUB_LOGIN=ascheman
+export GITHUB_TOKEN=...            # PAT with write:packages
+mvn -B -s settings.xml deploy
+----
+
+All four modules publish to `https://maven.pkg.github.com/ascheman/osgi-otel`.
+In CI the deploy step regenerates `settings.xml` via `setup-java`, so it uses the workflow's `GITHUB_TOKEN` instead.
+
+== Roadmap
+
+. *Producer / consumer / relay test bundles*, to make the IT show real bundle-to-bundle hops, not just system-bundle to user-bundle.
+. *EventAdmin instrumentation* with W3C trace-context propagation through event properties.
+This is the largest "aha" effect because asynchronous data flows become coherent traces.
+. *Declarative Services* - instrument `@Component` activation and `@Reference` bindings.
+. *Eclipse 4 `IEventBroker`* for richer topic-name spans.
+. *jQAssistant integration* - compare static (jQAssistant) and dynamic (OTel) bundle dependency graphs to spot dead links and undeclared connections.
+
+== License
+
+Apache License, Version 2.0.
+See link:LICENSE[LICENSE].

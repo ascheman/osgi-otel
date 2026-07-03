@@ -1,0 +1,145 @@
+= osgi-otel Samples
+:icons: font
+:source-highlighter: rouge
+
+Ready-to-copy launcher scripts that attach the OpenTelemetry Java Agent plus the `osgi-otel` extension to an OSGi/JVM application.
+They are thin convenience wrappers around the system properties documented in the main xref:../README.adoc[README] (section _Installing into your own OSGi application_).
+
+== Scripts
+
+`run-with-otel.template.sh`::
+Application-agnostic template.
+Copy it, set `OSGI_OTEL_APP_LAUNCHER`, and run.
+Supports two launch styles via `OSGI_OTEL_LAUNCH_STYLE`: `jvm-before` (plain `java`, bare Equinox) and `eclipse-vmargs` (Eclipse product).
+
+`run-mylyn-with-otel.sh`::
+A fully worked Eclipse/Mylyn example.
+Use it as the reference for adapting the template to a real product launcher (workspace/configuration handling, `-vmargs` positioning, OTLP reachability check).
+
+== Are any environment variables mandatory?
+
+*No environment variable is required* - every `OSGI_OTEL_*` variable has a default.
+
+The only things that must actually be true at runtime are not env vars but facts:
+
+* The three JAR files must exist (build them, see the main README _Quick start_).
+* In `run-with-otel.template.sh` you must tell it how to start your application via `OSGI_OTEL_APP_LAUNCHER` (there is no sensible default for that).
+* In `run-mylyn-with-otel.sh` the resolved `OSGI_OTEL_ECLIPSE_BIN` must point to a real Eclipse launcher; its default (`/Applications/Eclipse.app/...`) is only a macOS guess.
+
+== Variables
+
+The `OSGI_OTEL_` prefix avoids collisions with the OpenTelemetry SDK's own `OTEL_*` variables.
+
+=== Common to both scripts
+
+[cols="2,1,3"]
+|===
+|Variable |Default |Purpose
+
+|`OSGI_OTEL_HOME`
+|parent of the script directory
+|Project root, used to locate `dist/`.
+
+|`OSGI_OTEL_SERVICE_NAME`
+|`mylyn` / `osgi-app`
+|Becomes `otel.service.name`.
+
+|`OSGI_OTEL_EXPORTER`
+|`file`
+|`file`, `otlp`, `logging-otlp`, or `logging`.
+
+|`OSGI_OTEL_TRACES_FILE`
+|`<home>/traces.jsonl`
+|Output file for the `file` exporter.
+
+|`OSGI_OTEL_TRACES_APPEND`
+|`true`
+|`false` truncates on each run.
+
+|`OSGI_OTEL_FILTER_CROSS_BUNDLE_ONLY`
+|unset
+|`true` drops same-bundle spans (`-Dosgi.filter.cross-bundle-only`).
+
+|`OSGI_OTEL_FILTER_BUNDLE_INCLUDE`
+|unset
+|Java regex (`-Dosgi.filter.bundle.include`).
+
+|`OSGI_OTEL_FILTER_BUNDLE_EXCLUDE`
+|unset
+|Java regex (`-Dosgi.filter.bundle.exclude`).
+
+|`OSGI_OTEL_EXTRA_VMARGS`
+|empty
+|Extra `-D...` args appended verbatim.
+|===
+
+=== `run-with-otel.template.sh` only
+
+[cols="2,1,3"]
+|===
+|Variable |Default |Purpose
+
+|`OSGI_OTEL_APP_LAUNCHER`
+|_(none - you set it)_
+|Launcher executable, or `java`.
+
+|`OSGI_OTEL_LAUNCH_STYLE`
+|`jvm-before`
+|`jvm-before` or `eclipse-vmargs` (where the OTel args sit relative to the launcher).
+
+|`OSGI_OTEL_LIB_DIR`
+|`<home>/dist`
+|Directory holding the agent and extension JARs.
+
+|`OSGI_OTEL_OTLP_ENDPOINT`
+|`http://localhost:4318`
+|OTLP HTTP endpoint for `OSGI_OTEL_EXPORTER=otlp`.
+|===
+
+The `OSGI_OTEL_APP_ARGS` bash array (edited inside the script) carries the launcher's own arguments.
+
+=== `run-mylyn-with-otel.sh` only
+
+[cols="2,1,3"]
+|===
+|Variable |Default |Purpose
+
+|`OSGI_OTEL_ECLIPSE_BIN`
+|`/Applications/Eclipse.app/Contents/MacOS/eclipse`
+|Path to the Eclipse launcher binary.
+
+|`OSGI_OTEL_WORKSPACE`
+|`~/.mylyn-otel/workspace`
+|Eclipse `-data` directory (isolated by default).
+
+|`OSGI_OTEL_CONFIGURATION`
+|`~/.mylyn-otel/configuration`
+|Eclipse `-configuration` directory (isolated by default).
+
+|`OSGI_OTEL_JAEGER_HOST`
+|`localhost`
+|OTLP host for `OSGI_OTEL_EXPORTER=otlp`.
+
+|`OSGI_OTEL_JAEGER_PORT`
+|`4318`
+|OTLP HTTP port (not gRPC 4317).
+|===
+
+== Examples
+
+[source,bash]
+----
+# Generic template against a bare-Equinox launch
+# (edit the OSGI_OTEL_APP_ARGS array in the script for -jar ... etc.)
+OSGI_OTEL_APP_LAUNCHER=java ./run-with-otel.template.sh
+
+# Generic template against an Eclipse product
+OSGI_OTEL_APP_LAUNCHER=/opt/myproduct/myproduct \
+OSGI_OTEL_LAUNCH_STYLE=eclipse-vmargs \
+  ./run-with-otel.template.sh
+
+# Worked Mylyn example, cross-bundle calls only, sent to Jaeger
+OSGI_OTEL_EXPORTER=otlp \
+OSGI_OTEL_FILTER_CROSS_BUNDLE_ONLY=true \
+  ./run-mylyn-with-otel.sh
+----
