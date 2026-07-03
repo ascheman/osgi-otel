@@ -60,6 +60,13 @@
 
         <osgi.core.version>6.0.0</osgi.core.version>
 
+        <!-- Compile-only (provided): only stable API is used and the host supplies
+             its own version at runtime. Kept at Java-11 bytecode so the extension
+             builds on any JDK >= 11, matching the Java-8 runtime target. -->
+        <eclipse.commands.version>3.11.100</eclipse.commands.version>
+        <eclipse.jface.version>3.26.0</eclipse.jface.version>
+        <emf.common.version>2.26.0</emf.common.version>
+
         <bytebuddy.version>1.17.5</bytebuddy.version>
         <autoservice.version>1.1.1</autoservice.version>
 
@@ -139,6 +146,31 @@
                 <groupId>org.osgi</groupId>
                 <artifactId>org.osgi.core</artifactId>
                 <version>${osgi.core.version}</version>
+            </dependency>
+
+            <!-- Eclipse UI instrumentation (compile-only; the host supplies these at runtime).
+                 SWT is excluded: it is a platform-specific transitive of JFace and the
+                 advice never references SWT types. -->
+            <dependency>
+                <groupId>org.eclipse.platform</groupId>
+                <artifactId>org.eclipse.core.commands</artifactId>
+                <version>${eclipse.commands.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.platform</groupId>
+                <artifactId>org.eclipse.jface</artifactId>
+                <version>${eclipse.jface.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.eclipse.platform</groupId>
+                        <artifactId>org.eclipse.swt</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.emf</groupId>
+                <artifactId>org.eclipse.emf.common</artifactId>
+                <version>${emf.common.version}</version>
             </dependency>
 
             <dependency>

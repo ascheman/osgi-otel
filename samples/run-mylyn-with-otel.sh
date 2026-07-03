@@ -41,6 +41,10 @@ OSGI_OTEL_FILTER_CROSS_BUNDLE_ONLY="${OSGI_OTEL_FILTER_CROSS_BUNDLE_ONLY:-}"
 OSGI_OTEL_FILTER_BUNDLE_INCLUDE="${OSGI_OTEL_FILTER_BUNDLE_INCLUDE:-}"
 OSGI_OTEL_FILTER_BUNDLE_EXCLUDE="${OSGI_OTEL_FILTER_BUNDLE_EXCLUDE:-}"
 
+# Diagnostics (opt-in): trace the Eclipse event cascade (EMF eNotify + JavaBeans
+# PropertyChange). Firehose - only enable while investigating.
+OSGI_OTEL_TRACE_EVENTS="${OSGI_OTEL_TRACE_EVENTS:-}"
+
 AGENT_JAR="${OSGI_OTEL_HOME}/dist/opentelemetry-javaagent.jar"
 INSTRUMENTATION_JAR="${OSGI_OTEL_HOME}/dist/osgi-otel-extension-0.1.0-SNAPSHOT.jar"
 FILE_EXPORTER_JAR="${OSGI_OTEL_HOME}/dist/osgi-otel-file-exporter-0.1.0-SNAPSHOT.jar"
@@ -124,6 +128,11 @@ if [[ -n "${OSGI_OTEL_FILTER_BUNDLE_EXCLUDE}" ]]; then
     FILTER_INFO="${FILTER_INFO}, exclude=${OSGI_OTEL_FILTER_BUNDLE_EXCLUDE}"
 fi
 
+EVENTS_VMARG=""
+if [[ "${OSGI_OTEL_TRACE_EVENTS}" == "true" ]]; then
+    EVENTS_VMARG="-Dotel.instrumentation.eclipse-events.enabled=true"
+fi
+
 # --- Summary --------------------------------------------------------------
 
 cat <<EOF
@@ -160,6 +169,7 @@ exec "${OSGI_OTEL_ECLIPSE_BIN}" \
     -Dotel.service.name="${OSGI_OTEL_SERVICE_NAME}" \
     "${EXPORTER_VMARGS[@]}" \
     ${FILTER_VMARGS[@]+"${FILTER_VMARGS[@]}"} \
+    ${EVENTS_VMARG:+"${EVENTS_VMARG}"} \
     -Dotel.metrics.exporter=none \
     -Dotel.logs.exporter=none \
     ${OSGI_OTEL_EXTRA_VMARGS}

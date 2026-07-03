@@ -21,6 +21,11 @@
 
     <properties>
         <equinox.version>3.15.300</equinox.version>
+
+        <!-- Test-only harness: produces no main artifact, so it is neither
+             installed nor deployed (paired with maven-jar-plugin skipIfEmpty). -->
+        <maven.install.skip>true</maven.install.skip>
+        <maven.deploy.skip>true</maven.deploy.skip>
     </properties>
 
     <dependencies>
@@ -78,6 +83,17 @@
 
     <build>
         <plugins>
+            <!-- Test-only module: no main sources, so skip building an (empty) main JAR.
+                 Without this, a clean build fails in maven-jar-plugin with
+                 "You have to use a classifier to attach supplemental artifacts". -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <skipIfEmpty>true</skipIfEmpty>
+                </configuration>
+            </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>

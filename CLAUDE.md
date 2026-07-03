@@ -20,7 +20,7 @@ Parent: `net.aschemann.otel:osgi-otel-parent:0.1.0-SNAPSHOT` (root `pom.xml`).
 
 | Module | Purpose |
 |---|---|
-| `osgi-otel-extension` | The agent extension: `InstrumentationModule` + `TypeInstrumentation` + Byte Buddy `Advice` + `BundleSpanFilter`. |
+| `osgi-otel-extension` | The agent extension. Three `InstrumentationModule`s (pkg `net.aschemann.otel.*`): `osgi-bundle-context` (`BundleContext.getService`), `eclipse-ui` (`Command.executeWithChecks` + JFace `IAction.run`/`runWithEvent`), and `eclipse-events` (**opt-in**, default-off diagnostic: EMF `eNotify` + JavaBeans `firePropertyChange` → per-event spans for cascade depth/width/timing). |
 | `osgi-otel-file-exporter` | `SpanExporter` writing OTLP-shaped JSON Lines to a file (`-Dotel.traces.exporter=file`). |
 | `osgi-otel-test-bundle` | Minimal OSGi bundle (`packaging=bundle`, Felix bundle plugin) providing `HelloService`; used by the IT. |
 | `osgi-otel-it` | Failsafe IT: starts embedded Equinox 3.15.300 with `agent-for-testing`, installs the test bundle, calls `getService`, asserts the span. |
@@ -62,9 +62,18 @@ launcher-script convenience and all optional.
   `target/agents/`; failsafe attaches them via `-javaagent` /
   `-Dotel.javaagent.extensions` / `test.bundle.path`. Changing artifactIds or the
   copy step breaks the IT.
-- **Span attributes** are `osgi.caller.bundle`, `osgi.provider.bundle`,
-  `osgi.service.class`. `traces.jsonl` and the README `jq` recipes depend on these
-  exact keys — rename in lockstep.
+- **Span attributes** — OSGi: `osgi.caller.bundle`, `osgi.provider.bundle`,
+  `osgi.service.class`. Eclipse UI: `eclipse.command.id`, `eclipse.command.name`,
+  `eclipse.action.id`, `eclipse.action.text`, `eclipse.action.class`.
+  `traces.jsonl` and the README `jq` recipes depend on these exact keys — rename
+  in lockstep.
+- **Eclipse UI instrumentation compiles against `provided` Eclipse deps**
+  (`org.eclipse.platform:org.eclipse.core.commands` + `…:org.eclipse.jface`, SWT
+  excluded — it is a platform-specific transitive the advice never touches).
+  Pinned to Java-11-bytecode versions so the module builds on any JDK ≥ 11; the
+  host supplies its own versions at runtime. The `eclipse-ui` module self-disables
+  when the target classes are absent, and can be turned off with
+  `-Dotel.instrumentation.eclipse-ui.enabled=false`.
 - **Filter config is read once at class-load time** (`BundleSpanFilter`, system
   properties `osgi.filter.cross-bundle-only` / `.bundle.include` / `.bundle.exclude`).
   A JVM restart is required to change it; there is no live reconfiguration.

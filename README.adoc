@@ -4,17 +4,18 @@
 :icons: font
 :source-highlighter: rouge
 
-OpenTelemetry Java Agent extension that emits spans for OSGi inter-bundle data flow.
-Currently instruments `BundleContext.getService(ServiceReference)` and tags each span with caller bundle, provider bundle, and service interface.
+OpenTelemetry Java Agent extension that emits spans for OSGi inter-bundle data flow and Eclipse UI actions.
+It instruments `BundleContext.getService(ServiceReference)` (tagging caller bundle, provider bundle, and service interface) and Eclipse command/JFace-action execution, so a user gesture becomes a span that the downstream service, HTTP, and DB work nests under.
 
-The driving use-case is observing data flow between bundles in Eclipse RCP applications (Mylyn, Equinox-based products).
-The extension itself is plain OSGi and does not depend on Eclipse-specific APIs.
+The driving use-case is observing data flow in Eclipse RCP applications (Mylyn, Equinox-based products).
+The OSGi instrumentation is plain OSGi; the Eclipse UI instrumentation is a separate module that self-disables when the Eclipse classes are absent.
 
 == Status
 
 Very early v1.
 
-* `BundleContext.getService` instrumented (single instrumentation module)
+* `BundleContext.getService` instrumented (OSGi service lookups)
+* Eclipse UI actions instrumented: Commands framework (`Command.executeWithChecks`) and JFace `IAction.run`
 * File-based JSON-Lines exporter (no Jaeger/OTLP back end required)
 * Optional bundle-name regex filter (cross-bundle-only / include / exclude)
 * Embedded-Equinox integration test, runs in CI
@@ -29,7 +30,7 @@ NOTE: Roadmap items at the end of this file.
 
 |`osgi-otel-extension`
 |The OTel Java Agent extension itself.
-Contains `InstrumentationModule`, `TypeInstrumentation`, advice and the bundle filter.
+Two instrumentation modules - `osgi-bundle-context` (OSGi service lookups) and `eclipse-ui` (Eclipse command/action execution) - plus advice and the bundle filter.
 
 |`osgi-otel-file-exporter`
 |`SpanExporter` that writes OTLP-shaped JSON Lines to a file (`-Dotel.traces.exporter=file`).
@@ -40,6 +41,50 @@ Contains `InstrumentationModule`, `TypeInstrumentation`, advice and the bundle f
 |`osgi-otel-it`
 |Integration test: starts an embedded Equinox 3.15.300, attaches `agent-for-testing`, verifies spans.
 |===
+
+== What gets instrumented
+
+[cols="1,2,2"]
+|===
+|Module |Chokepoint |Span name + attributes
+
+|`osgi-bundle-context`
+|`BundleContext.getService(ServiceReference)`
+|`BundleContext.getService <service>`; `osgi.caller.bundle`, `osgi.provider.bundle`, `osgi.service.class`
+
+|`eclipse-ui` (commands)
+|`org.eclipse.core.commands.Command.executeWithChecks`
+|`command <name>`; `eclipse.command.id`, `eclipse.command.name`
+
+|`eclipse-ui` (actions)
+|`org.eclipse.jface.action.IAction.run()` / `runWithEvent()`
+|`action <text>`; `eclipse.action.id`, `eclipse.action.text`, `eclipse.action.class`
+|===
+
+The `eclipse-ui` module opens a span for each user gesture and makes it current for the duration of the handler/action.
+Same-thread downstream spans - service lookups, HTTP, and JDBC/Hibernate from the agent's own built-in instrumentations - therefore nest under it into one coherent trace.
+It self-disables when the Eclipse classes are absent; force either module off with `-Dotel.instrumentation.eclipse-ui.enabled=false` (or `...osgi-bundle-context.enabled=false`).
+
+NOTE: Async flows (Jobs, `Display.asyncExec`, EventAdmin) do not yet propagate context across the thread hop - see the roadmap.
+
+=== Diagnostic: Event-cascade tracing (opt-in)
+
+A third, *opt-in* module `eclipse-events` turns each fired model event into a nested span, so an event cascade shows up as a tree: depth is the cascade depth, span count is how many events one gesture triggers, and durations show the time cost.
+It instruments the two central fan-out points - EMF `BasicNotifierImpl.eNotify` and JavaBeans `PropertyChangeSupport.firePropertyChange` (the latter is a JDK class and may not be instrumentable in every host).
+
+It is a firehose, so it is *disabled by default*.
+Enable it only while investigating:
+
+[source,bash]
+----
+-Dotel.instrumentation.eclipse-events.enabled=true
+----
+
+Attributes: `eclipse.event.kind`, `eclipse.event.source`, `eclipse.event.type` (EMF), `eclipse.event.property` and `eclipse.event.listeners` (fan-out width, JavaBeans).
+The EMF hook deliberately avoids reading the changed feature's name, because touching the EMF metamodel from inside `eNotify` can re-enter `EcorePackage` during its own class initialization and crash the host.
+The `samples/` scripts expose it as `OSGI_OTEL_TRACE_EVENTS=true`.
+
+CAUTION: Per-event span creation adds overhead that inflates the measured durations - use this for depth, count, and relative hotspots, not for precise wall-clock timing.
 
 == Quick start
 
@@ -482,6 +527,7 @@ In CI the deploy step regenerates `settings.xml` via `setup-java`, so it uses th
 . *Producer / consumer / relay test bundles*, to make the IT show real bundle-to-bundle hops, not just system-bundle to user-bundle.
 . *EventAdmin instrumentation* with W3C trace-context propagation through event properties.
 This is the largest "aha" effect because asynchronous data flows become coherent traces.
+. *Raw SWT event firehose* - instrument `Widget.sendEvent` behind a strict event-type filter (deferred: `Paint`/`MouseMove` would flood without one).
 . *Declarative Services* - instrument `@Component` activation and `@Reference` bindings.
 . *Eclipse 4 `IEventBroker`* for richer topic-name spans.
 . *jQAssistant integration* - compare static (jQAssistant) and dynamic (OTel) bundle dependency graphs to spot dead links and undeclared connections.
