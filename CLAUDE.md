@@ -64,9 +64,27 @@ launcher-script convenience and all optional.
   copy step breaks the IT.
 - **Span attributes** — OSGi: `osgi.caller.bundle`, `osgi.provider.bundle`,
   `osgi.service.class`. Eclipse UI: `eclipse.command.id`, `eclipse.command.name`,
-  `eclipse.action.id`, `eclipse.action.text`, `eclipse.action.class`.
+  `eclipse.action.id`, `eclipse.action.text`, `eclipse.action.class`. Business
+  context on UI spans (best-effort, only set when resolvable):
+  `eclipse.trigger.widget.class` (SWT widget that fired the command/action),
+  `eclipse.trigger.widget.text` (**opt-in**, see below), `eclipse.selection.class`
+  and `eclipse.selection.size` (workbench selection, command spans only), plus
+  `eclipse.selection.label` (**opt-in**, first element's `toString`).
   `traces.jsonl` and the README `jq` recipes depend on these exact keys — rename
   in lockstep.
+- **Widget/selection context is read reflectively** in `CommandExecuteAdvice` /
+  `ActionRunAdvice` — SWT and JFace-viewer selection APIs are deliberately
+  off-classpath, so the advice reflects on `Event.widget`, `widget.getText()` and
+  the eval-context `selection` variable, tolerating every failure (empty attr).
+  `ActionRunAdvice` binds the SWT event via `@Advice.Argument(0, optional=true)`
+  (null for `run()`, the `Event` for `runWithEvent`). Widget *text* is PII, so it
+  is off by default: enable with `-Dosgi.capture.widget.text=true`, cap length
+  with `-Dosgi.capture.widget.text.max=N` (default 64). The selection element's
+  label (`eclipse.selection.label`, the first element's `toString()`) is likewise
+  domain data and off by default: `-Dosgi.capture.selection.label=true`, capped by
+  `-Dosgi.capture.selection.label.max=N` (default 64). No helper classes — the
+  logic stays inline in the advice because this extension has no muzzle/helper
+  injection.
 - **Eclipse UI instrumentation compiles against `provided` Eclipse deps**
   (`org.eclipse.platform:org.eclipse.core.commands` + `…:org.eclipse.jface`, SWT
   excluded — it is a platform-specific transitive the advice never touches).

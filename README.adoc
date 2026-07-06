@@ -54,16 +54,32 @@ Two instrumentation modules - `osgi-bundle-context` (OSGi service lookups) and `
 
 |`eclipse-ui` (commands)
 |`org.eclipse.core.commands.Command.executeWithChecks`
-|`command <name>`; `eclipse.command.id`, `eclipse.command.name`
+|`command <name>`; `eclipse.command.id`, `eclipse.command.name`, plus business context (see below)
 
 |`eclipse-ui` (actions)
 |`org.eclipse.jface.action.IAction.run()` / `runWithEvent()`
-|`action <text>`; `eclipse.action.id`, `eclipse.action.text`, `eclipse.action.class`
+|`action <text>`; `eclipse.action.id`, `eclipse.action.text`, `eclipse.action.class`, plus business context (see below)
 |===
 
 The `eclipse-ui` module opens a span for each user gesture and makes it current for the duration of the handler/action.
 Same-thread downstream spans - service lookups, HTTP, and JDBC/Hibernate from the agent's own built-in instrumentations - therefore nest under it into one coherent trace.
 It self-disables when the Eclipse classes are absent; force either module off with `-Dotel.instrumentation.eclipse-ui.enabled=false` (or `...osgi-bundle-context.enabled=false`).
+
+==== Business context on UI spans
+
+Each command/action span is enriched, best-effort, with _what the user was acting on_.
+These attributes are only present when they can be resolved, so downstream `jq`/Jaeger queries must tolerate their absence.
+
+`eclipse.trigger.widget.class`:: The runtime class of the SWT widget that fired the gesture (button, menu item, tree, text field, ...).
+`eclipse.selection.class`:: The class of the current workbench selection - for a structured selection, the class of its first element, i.e. your *domain object*.
+Command spans only.
+`eclipse.selection.size`:: Number of selected elements (structured selections only).
+`eclipse.selection.label`:: The first selected element's label (its `toString()`) - the domain object's *value*, command spans only.
+This is domain data (PII), so it is *opt-in*: enable with `-Dosgi.capture.selection.label=true` and cap the length with `-Dosgi.capture.selection.label.max=N` (default 64).
+`eclipse.trigger.widget.text`:: The text/label/entered value of the triggering widget.
+This can contain user input (PII), so it is *opt-in*: enable with `-Dosgi.capture.widget.text=true` and cap the recorded length with `-Dosgi.capture.widget.text.max=N` (default 64).
+
+SWT and the JFace selection APIs are read reflectively, because they are intentionally off the compile classpath; a host without them simply yields empty attributes rather than an error.
 
 NOTE: Async flows (Jobs, `Display.asyncExec`, EventAdmin) do not yet propagate context across the thread hop - see the roadmap.
 
@@ -141,6 +157,24 @@ Not to be confused with an OSGi _service_ - those appear per span in `osgi.servi
 |`otel.exporter.otlp.endpoint`
 |agent default
 |OTLP collector endpoint; use the HTTP port (e.g. `http://localhost:4318`) for `otel.traces.exporter=otlp`.
+
+|`osgi.capture.widget.text`
+|`false`
+|`true` records the triggering widget's text/entered value on `eclipse-ui` spans (`eclipse.trigger.widget.text`).
+May contain user input (PII) - opt-in.
+
+|`osgi.capture.widget.text.max`
+|`64`
+|Maximum number of characters of widget text to record; longer values are truncated.
+
+|`osgi.capture.selection.label`
+|`false`
+|`true` records the first selected element's label on command spans (`eclipse.selection.label`, the element's `toString`).
+Domain data (PII) - opt-in.
+
+|`osgi.capture.selection.label.max`
+|`64`
+|Maximum number of characters of the selection label to record; longer values are truncated.
 
 |`osgi.filter.cross-bundle-only`
 |`false`
