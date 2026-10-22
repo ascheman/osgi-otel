@@ -53,10 +53,16 @@
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
 
-        <otel.javaagent.version>2.27.0</otel.javaagent.version>
-        <otel.instrumentation.version>2.27.0</otel.instrumentation.version>
-        <otel.instrumentation.alpha.version>2.27.0-alpha</otel.instrumentation.alpha.version>
-        <otel.sdk.bom.version>1.62.0</otel.sdk.bom.version>
+        <otel.javaagent.version>2.32.0</otel.javaagent.version>
+        <otel.instrumentation.version>2.32.0</otel.instrumentation.version>
+        <!-- ACCEPTED pre-release exception: OpenTelemetry publishes its javaagent
+             extension-API, tooling and testing artifacts only with an -alpha suffix
+             (their API is not declared stable); there is no stable-named variant and
+             the extension cannot be built without them. These are provided/test only
+             and must stay in lockstep with otel.instrumentation.version; the shipped
+             agent (otel.javaagent.version) is GA. -->
+        <otel.instrumentation.alpha.version>2.32.0-alpha</otel.instrumentation.alpha.version>
+        <otel.sdk.bom.version>1.67.0</otel.sdk.bom.version>
 
         <osgi.core.version>6.0.0</osgi.core.version>
 
@@ -67,11 +73,14 @@
         <eclipse.jface.version>3.26.0</eclipse.jface.version>
         <emf.common.version>2.26.0</emf.common.version>
 
-        <bytebuddy.version>1.17.5</bytebuddy.version>
+        <!-- Must match the byte-buddy that the OTel agent bundles at runtime
+             (byte-buddy is provided): opentelemetry-javaagent 2.32.0 ships
+             byte-buddy-dep 1.18.14. Do not bump independently of the agent. -->
+        <bytebuddy.version>1.18.14</bytebuddy.version>
         <autoservice.version>1.1.1</autoservice.version>
 
-        <junit.version>5.11.3</junit.version>
-        <assertj.version>3.26.3</assertj.version>
+        <junit.version>5.14.4</junit.version>
+        <assertj.version>3.27.7</assertj.version>
 
         <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
         <maven.surefire.plugin.version>3.5.2</maven.surefire.plugin.version>
@@ -279,6 +288,14 @@
                                     <version>[3.9,4.0)</version>
                                     <message>Build with Maven 3.9.x via ./mvnw; Maven 4 is not supported (incompatible beta core plugins).</message>
                                 </requireMavenVersion>
+                                <!-- NOTE: a general alpha/beta ban is deliberately NOT enforced here.
+                                     bannedDependencies treats any wildcard version pattern as match-all,
+                                     so an "-alpha suffix" ban cannot be expressed without banning every
+                                     dependency. The only pre-release deps we use are OpenTelemetry's
+                                     javaagent extension-API/tooling/testing artifacts, which OTel
+                                     publishes only with an -alpha suffix (API not declared stable);
+                                     they are provided/test only and the shipped agent is GA. This is
+                                     the documented, accepted exception (see the otel.*.alpha property). -->
                             </rules>
                         </configuration>
                     </execution>

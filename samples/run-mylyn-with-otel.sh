@@ -61,8 +61,8 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 [[ -x "${OSGI_OTEL_ECLIPSE_BIN}" ]] || die "Eclipse binary not found or not executable: ${OSGI_OTEL_ECLIPSE_BIN}"
 [[ -f "${AGENT_JAR}" ]] || die "OTel agent JAR not found: ${AGENT_JAR}
 Run from ${OSGI_OTEL_HOME}:
-  mvn -B install -DskipTests
-  mvn -B dependency:copy -Dartifact=io.opentelemetry.javaagent:opentelemetry-javaagent:2.27.0 -DoutputDirectory=dist -Dmdep.stripVersion=true
+  ./mvnw -B install -DskipTests
+  ./mvnw -B dependency:copy -Dartifact=io.opentelemetry.javaagent:opentelemetry-javaagent:2.32.0 -DoutputDirectory=dist -Dmdep.stripVersion=true
   cp osgi-otel-extension/target/osgi-otel-extension-0.1.0-SNAPSHOT.jar dist/
   cp osgi-otel-file-exporter/target/osgi-otel-file-exporter-0.1.0-SNAPSHOT.jar dist/"
 [[ -f "${INSTRUMENTATION_JAR}" ]] || die "Instrumentation extension JAR not found: ${INSTRUMENTATION_JAR}"

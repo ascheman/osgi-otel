@@ -128,7 +128,7 @@ NOTE: The module needs no Hibernate dependency and touches no Hibernate type - i
 ----
 ./mvnw -B install -DskipTests
 ./mvnw -B dependency:copy \
-  -Dartifact=io.opentelemetry.javaagent:opentelemetry-javaagent:2.27.0 \
+  -Dartifact=io.opentelemetry.javaagent:opentelemetry-javaagent:2.32.0 \
   -DoutputDirectory=dist -Dmdep.stripVersion=true
 cp osgi-otel-extension/target/osgi-otel-extension-0.1.0-SNAPSHOT.jar dist/
 cp osgi-otel-file-exporter/target/osgi-otel-file-exporter-0.1.0-SNAPSHOT.jar dist/
@@ -279,7 +279,7 @@ The OpenTelemetry Java Agent 2.x supports a Java 8+ runtime; this extension is c
 |===
 |Artifact |From |Role
 
-|`io.opentelemetry.javaagent:opentelemetry-javaagent:2.27.0`
+|`io.opentelemetry.javaagent:opentelemetry-javaagent:2.32.0`
 |Maven Central
 |The agent itself (the `-javaagent`).
 
@@ -322,7 +322,7 @@ mkdir -p otel-libs
 
 # The agent comes from Maven Central (no auth needed)
 mvn dependency:copy -Dmdep.stripVersion=true -DoutputDirectory=otel-libs \#<1>
-  -Dartifact=io.opentelemetry.javaagent:opentelemetry-javaagent:2.27.0
+  -Dartifact=io.opentelemetry.javaagent:opentelemetry-javaagent:2.32.0
 
 # The two extensions come from GitHub Packages (repo id = server id above)
 mvn dependency:copy -Dmdep.stripVersion=true -DoutputDirectory=otel-libs \#<2>
@@ -346,7 +346,7 @@ The agent comes from Maven Central without a token:
 [source,bash]
 ----
 curl -L -o otel-libs/opentelemetry-javaagent.jar \
-  https://repo1.maven.org/maven2/io/opentelemetry/javaagent/opentelemetry-javaagent/2.27.0/opentelemetry-javaagent-2.27.0.jar
+  https://repo1.maven.org/maven2/io/opentelemetry/javaagent/opentelemetry-javaagent/2.32.0/opentelemetry-javaagent-2.32.0.jar
 ----
 
 For a released (non-snapshot) version the address is deterministic:
