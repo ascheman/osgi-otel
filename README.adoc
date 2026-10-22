@@ -3,6 +3,7 @@
 :toc-placement: preamble
 :icons: font
 :source-highlighter: rouge
+:otel-agent-version: 2.32.0
 
 OpenTelemetry Java Agent extension that emits spans for OSGi inter-bundle data flow and Eclipse UI actions.
 It instruments `BundleContext.getService(ServiceReference)` (tagging caller bundle, provider bundle, and service interface) and Eclipse command/JFace-action execution, so a user gesture becomes a span that the downstream service, HTTP, and DB work nests under.
@@ -124,11 +125,11 @@ NOTE: The module needs no Hibernate dependency and touches no Hibernate type - i
 
 . Build everything and assemble `dist/` (agent + both extension JARs):
 +
-[source,bash]
+[source,bash,subs="attributes+"]
 ----
 ./mvnw -B install -DskipTests
 ./mvnw -B dependency:copy \
-  -Dartifact=io.opentelemetry.javaagent:opentelemetry-javaagent:2.32.0 \
+  -Dartifact=io.opentelemetry.javaagent:opentelemetry-javaagent:{otel-agent-version} \
   -DoutputDirectory=dist -Dmdep.stripVersion=true
 cp osgi-otel-extension/target/osgi-otel-extension-0.1.0-SNAPSHOT.jar dist/
 cp osgi-otel-file-exporter/target/osgi-otel-file-exporter-0.1.0-SNAPSHOT.jar dist/
@@ -279,7 +280,7 @@ The OpenTelemetry Java Agent 2.x supports a Java 8+ runtime; this extension is c
 |===
 |Artifact |From |Role
 
-|`io.opentelemetry.javaagent:opentelemetry-javaagent:2.32.0`
+|`io.opentelemetry.javaagent:opentelemetry-javaagent:{otel-agent-version}`
 |Maven Central
 |The agent itself (the `-javaagent`).
 
@@ -316,13 +317,13 @@ Configure your own token *once* in your personal `~/.m2/settings.xml` (not the `
 
 Then download the three JARs - no `-s`, no repo checkout:
 
-[source,bash]
+[source,bash,subs="attributes+"]
 ----
 mkdir -p otel-libs
 
 # The agent comes from Maven Central (no auth needed)
 mvn dependency:copy -Dmdep.stripVersion=true -DoutputDirectory=otel-libs \#<1>
-  -Dartifact=io.opentelemetry.javaagent:opentelemetry-javaagent:2.32.0
+  -Dartifact=io.opentelemetry.javaagent:opentelemetry-javaagent:{otel-agent-version}
 
 # The two extensions come from GitHub Packages (repo id = server id above)
 mvn dependency:copy -Dmdep.stripVersion=true -DoutputDirectory=otel-libs \#<2>
@@ -343,10 +344,10 @@ TIP: If you built this project yourself (`mvn -B install`), the two extension JA
 GitHub Packages is a plain Maven-layout HTTPS repo, so `curl` works too (same token, Basic auth).
 The agent comes from Maven Central without a token:
 
-[source,bash]
+[source,bash,subs="attributes+"]
 ----
 curl -L -o otel-libs/opentelemetry-javaagent.jar \
-  https://repo1.maven.org/maven2/io/opentelemetry/javaagent/opentelemetry-javaagent/2.32.0/opentelemetry-javaagent-2.32.0.jar
+  https://repo1.maven.org/maven2/io/opentelemetry/javaagent/opentelemetry-javaagent/{otel-agent-version}/opentelemetry-javaagent-{otel-agent-version}.jar
 ----
 
 For a released (non-snapshot) version the address is deterministic:
