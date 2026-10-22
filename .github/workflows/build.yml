@@ -46,4 +46,8 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Substituted into the distributionManagement URL in the parent pom's
+          # `github` profile (https://maven.pkg.github.com/${env.GITHUB_LOGIN}/...);
+          # without it the literal ${env.GITHUB_LOGIN} breaks the deploy URL.
+          GITHUB_LOGIN: ${{ github.repository_owner }}
         run: ./mvnw -B -s "${{ github.workspace }}/settings.xml" deploy -DskipTests
