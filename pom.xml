@@ -70,7 +70,7 @@
              its own version at runtime. Kept at Java-11 bytecode so the extension
              builds on any JDK >= 11, matching the Java-8 runtime target. -->
         <eclipse.commands.version>3.11.100</eclipse.commands.version>
-        <eclipse.jface.version>3.26.0</eclipse.jface.version>
+        <eclipse.jface.version>3.31.0</eclipse.jface.version>
         <emf.common.version>2.26.0</emf.common.version>
 
         <!-- Must match the byte-buddy that the OTel agent bundles at runtime
