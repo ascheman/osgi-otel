@@ -578,15 +578,36 @@ mvn -B -s settings.xml deploy
 All four modules publish to `https://maven.pkg.github.com/ascheman/osgi-otel`.
 In CI the deploy step regenerates `settings.xml` via `setup-java`, so it uses the workflow's `GITHUB_TOKEN` instead.
 
+== Implemented so far
+
+* *OSGi service flow* - `BundleContext.getService` spans tagged with caller/provider bundle and service interface, with a load-time bundle filter.
+* *Eclipse UI gestures* - `eclipse-ui` module: spans for `Command.executeWithChecks` and JFace `IAction.run`/`runWithEvent`, enriched with business context (triggering widget class, workbench selection class/size; opt-in widget text and selection label).
+* *Event-cascade diagnostic* - `eclipse-events` module (opt-in): EMF `eNotify` + JavaBeans `firePropertyChange` as nested spans, to measure cascade depth, width and timing.
+* *Transaction trigger stack* - `hibernate-stack` module (opt-in): call stack at `org.hibernate.Transaction.begin`/`commit`, to reveal what triggered an orphan transaction.
+* *File exporter* - JSON-Lines `SpanExporter` for offline `jq`/Graphviz analysis, plus GitHub Packages deployment of all modules.
+
 == Roadmap
 
+Instrumentation targets::
+
 . *Producer / consumer / relay test bundles*, to make the IT show real bundle-to-bundle hops, not just system-bundle to user-bundle.
+. *Async context propagation across Eclipse `Job`s and `Display.asyncExec`*, so work scheduled off the UI thread nests under the originating gesture instead of surfacing as an orphan root (the gap behind orphan `Transaction.commit` spans; the agent's `ExecutorService` propagation does not cover the Eclipse `Job` worker pool).
 . *EventAdmin instrumentation* with W3C trace-context propagation through event properties.
 This is the largest "aha" effect because asynchronous data flows become coherent traces.
 . *Raw SWT event firehose* - instrument `Widget.sendEvent` behind a strict event-type filter (deferred: `Paint`/`MouseMove` would flood without one).
 . *Declarative Services* - instrument `@Component` activation and `@Reference` bindings.
 . *Eclipse 4 `IEventBroker`* for richer topic-name spans.
+
+Analysis and tooling::
+
 . *jQAssistant integration* - compare static (jQAssistant) and dynamic (OTel) bundle dependency graphs to spot dead links and undeclared connections.
+. *Bundle-graph tooling* - promote the ad-hoc `jq`/Graphviz edge-list recipe into a reusable helper script under `samples/`.
+. *Neo4j / jQA import* - load the runtime `osgi.caller.bundle -> osgi.provider.bundle` edges as `(:Bundle)-[:USES]->(:Bundle)` for architecture queries (cycles, layer violations, undeclared uses), complementing the static structure jQAssistant already scans.
+
+Considered and rejected::
+
+* *Jaeger `peer.service` per bundle* - would only yield a star from the single `service.name` to pseudo-bundle nodes, not the real bundle-to-bundle topology (a per-bundle `service.name` is impossible with one agent Resource).
+Use the data-derived Graphviz/Neo4j graph instead.
 
 == License
 
