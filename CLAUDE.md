@@ -118,12 +118,16 @@ launcher-script convenience and all optional.
 - **License header** (Apache 2.0, "Copyright 2026 Gerd Aschemann") goes on every
   Java file — match the existing 4-line header.
 - `README.adoc` is AsciiDoc: one sentence per line, `*`/`**` lists, `[source,…]`
-  blocks — not Markdown.
+  blocks — not Markdown. The OTel agent version is single-sourced via the
+  `:otel-agent-version:` document attribute; code blocks that reference it carry
+  `subs="attributes+"` (the trailing-`+` form — the leading-`+` form is not
+  substituted under the rouge highlighter). Keep it in sync with the pom.
 
 ## Git
 
-- **No commits exist yet** — the whole tree is still untracked. First commit will
-  establish history.
+- **Branch workflow:** work on **`develop`**; merge to **`main`** only when the
+  state is stable. Further work may use `feature/*` or `bugfix/*` branches off
+  `develop`. CI deploys to GitHub Packages only on pushes to `main`.
 - This is a **personal** project (`net.aschemann.otel`). Commit author is
   **Gerd Aschemann <gerd@aschemann.net>** (matches `<developers>` in the parent
   pom) — *not* the Apache identity used for jQAssistant/Maven work.
