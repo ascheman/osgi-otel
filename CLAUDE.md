@@ -20,7 +20,7 @@ Parent: `net.aschemann.otel:osgi-otel-parent:0.1.0-SNAPSHOT` (root `pom.xml`).
 
 | Module | Purpose |
 |---|---|
-| `osgi-otel-extension` | The agent extension. Three `InstrumentationModule`s (pkg `net.aschemann.otel.*`): `osgi-bundle-context` (`BundleContext.getService`), `eclipse-ui` (`Command.executeWithChecks` + JFace `IAction.run`/`runWithEvent`), and `eclipse-events` (**opt-in**, default-off diagnostic: EMF `eNotify` + JavaBeans `firePropertyChange` → per-event spans for cascade depth/width/timing). |
+| `osgi-otel-extension` | The agent extension. Four `InstrumentationModule`s (pkg `net.aschemann.otel.*`): `osgi-bundle-context` (`BundleContext.getService`), `eclipse-ui` (`Command.executeWithChecks` + JFace `IAction.run`/`runWithEvent`), `eclipse-events` (**opt-in**, default-off diagnostic: EMF `eNotify` + JavaBeans `firePropertyChange` → per-event spans for cascade depth/width/timing), and `hibernate-stack` (**opt-in**, default-off diagnostic: `org.hibernate.Transaction.begin`/`commit` → span with `code.stacktrace` to reveal what triggered an orphan transaction across an async hop). |
 | `osgi-otel-file-exporter` | `SpanExporter` writing OTLP-shaped JSON Lines to a file (`-Dotel.traces.exporter=file`). |
 | `osgi-otel-test-bundle` | Minimal OSGi bundle (`packaging=bundle`, Felix bundle plugin) providing `HelloService`; used by the IT. |
 | `osgi-otel-it` | Failsafe IT: starts embedded Equinox 3.15.300 with `agent-for-testing`, installs the test bundle, calls `getService`, asserts the span. |
@@ -85,6 +85,13 @@ launcher-script convenience and all optional.
   `-Dosgi.capture.selection.label.max=N` (default 64). No helper classes — the
   logic stays inline in the advice because this extension has no muzzle/helper
   injection.
+- **`hibernate-stack` needs no Hibernate dependency.** It matches
+  `org.hibernate.Transaction` only as a string (`implementsInterface(named(...))`)
+  and `TransactionStackAdvice` touches no Hibernate type — it just reads
+  `Thread.currentThread().getStackTrace()` and emits a `hibernate.tx.<begin|commit>`
+  span with `code.function` + `code.stacktrace`. `frames[1]` is the instrumented
+  method (advice is inlined), so the render starts at `frames[1]`. Depth cap:
+  `-Dosgi.capture.stack.max=N` (default 32). Same inline-only rule (no muzzle).
 - **Eclipse UI instrumentation compiles against `provided` Eclipse deps**
   (`org.eclipse.platform:org.eclipse.core.commands` + `…:org.eclipse.jface`, SWT
   excluded — it is a platform-specific transitive the advice never touches).

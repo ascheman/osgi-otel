@@ -54,6 +54,10 @@ OSGI_OTEL_FILTER_BUNDLE_EXCLUDE="${OSGI_OTEL_FILTER_BUNDLE_EXCLUDE:-}"
 # PropertyChange). This is a firehose - only enable it while investigating.
 OSGI_OTEL_TRACE_EVENTS="${OSGI_OTEL_TRACE_EVENTS:-}"
 
+# Diagnostics (opt-in): capture the call stack at Hibernate Transaction
+# begin/commit (code.stacktrace), to reveal what triggered an orphan transaction.
+OSGI_OTEL_TRACE_TX_STACK="${OSGI_OTEL_TRACE_TX_STACK:-}"
+
 OSGI_OTEL_EXTRA_VMARGS="${OSGI_OTEL_EXTRA_VMARGS:-}"
 
 # ============================================================================
@@ -106,6 +110,7 @@ esac
 [[ -n "${OSGI_OTEL_FILTER_BUNDLE_INCLUDE}" ]]     && OTEL_ARGS+=( "-Dosgi.filter.bundle.include=${OSGI_OTEL_FILTER_BUNDLE_INCLUDE}" )
 [[ -n "${OSGI_OTEL_FILTER_BUNDLE_EXCLUDE}" ]]     && OTEL_ARGS+=( "-Dosgi.filter.bundle.exclude=${OSGI_OTEL_FILTER_BUNDLE_EXCLUDE}" )
 [[ "${OSGI_OTEL_TRACE_EVENTS}" == "true" ]]       && OTEL_ARGS+=( "-Dotel.instrumentation.eclipse-events.enabled=true" )
+[[ "${OSGI_OTEL_TRACE_TX_STACK}" == "true" ]]     && OTEL_ARGS+=( "-Dotel.instrumentation.hibernate-stack.enabled=true" )
 # shellcheck disable=SC2206  # intentional word splitting for extra -D args
 [[ -n "${OSGI_OTEL_EXTRA_VMARGS}" ]]              && OTEL_ARGS+=( ${OSGI_OTEL_EXTRA_VMARGS} )
 

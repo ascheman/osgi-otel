@@ -72,6 +72,10 @@ The `OSGI_OTEL_` prefix avoids collisions with the OpenTelemetry SDK's own `OTEL
 |unset
 |`true` enables the opt-in `eclipse-events` diagnostic (EMF + JavaBeans event cascade, a firehose).
 
+|`OSGI_OTEL_TRACE_TX_STACK`
+|unset
+|`true` enables the opt-in `hibernate-stack` diagnostic (call stack at Hibernate `Transaction` begin/commit).
+
 |`OSGI_OTEL_EXTRA_VMARGS`
 |empty
 |Extra `-D...` args appended verbatim.

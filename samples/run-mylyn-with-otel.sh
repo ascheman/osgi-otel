@@ -45,6 +45,10 @@ OSGI_OTEL_FILTER_BUNDLE_EXCLUDE="${OSGI_OTEL_FILTER_BUNDLE_EXCLUDE:-}"
 # PropertyChange). Firehose - only enable while investigating.
 OSGI_OTEL_TRACE_EVENTS="${OSGI_OTEL_TRACE_EVENTS:-}"
 
+# Diagnostics (opt-in): capture the call stack at Hibernate Transaction
+# begin/commit (code.stacktrace), to reveal what triggered an orphan transaction.
+OSGI_OTEL_TRACE_TX_STACK="${OSGI_OTEL_TRACE_TX_STACK:-}"
+
 AGENT_JAR="${OSGI_OTEL_HOME}/dist/opentelemetry-javaagent.jar"
 INSTRUMENTATION_JAR="${OSGI_OTEL_HOME}/dist/osgi-otel-extension-0.1.0-SNAPSHOT.jar"
 FILE_EXPORTER_JAR="${OSGI_OTEL_HOME}/dist/osgi-otel-file-exporter-0.1.0-SNAPSHOT.jar"
@@ -133,6 +137,11 @@ if [[ "${OSGI_OTEL_TRACE_EVENTS}" == "true" ]]; then
     EVENTS_VMARG="-Dotel.instrumentation.eclipse-events.enabled=true"
 fi
 
+TX_STACK_VMARG=""
+if [[ "${OSGI_OTEL_TRACE_TX_STACK}" == "true" ]]; then
+    TX_STACK_VMARG="-Dotel.instrumentation.hibernate-stack.enabled=true"
+fi
+
 # --- Summary --------------------------------------------------------------
 
 cat <<EOF
@@ -170,6 +179,7 @@ exec "${OSGI_OTEL_ECLIPSE_BIN}" \
     "${EXPORTER_VMARGS[@]}" \
     ${FILTER_VMARGS[@]+"${FILTER_VMARGS[@]}"} \
     ${EVENTS_VMARG:+"${EVENTS_VMARG}"} \
+    ${TX_STACK_VMARG:+"${TX_STACK_VMARG}"} \
     -Dotel.metrics.exporter=none \
     -Dotel.logs.exporter=none \
     ${OSGI_OTEL_EXTRA_VMARGS}

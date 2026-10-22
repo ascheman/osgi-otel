@@ -102,6 +102,24 @@ The `samples/` scripts expose it as `OSGI_OTEL_TRACE_EVENTS=true`.
 
 CAUTION: Per-event span creation adds overhead that inflates the measured durations - use this for depth, count, and relative hotspots, not for precise wall-clock timing.
 
+=== Diagnostic: Transaction trigger stack (opt-in)
+
+Hibernate `Transaction.commit` spans often appear as *orphan roots* with no visible cause, because the gesture that triggered them ran on another thread - an Eclipse `Job`, `Display.asyncExec`, an auto-save - across which the trace context is not yet propagated.
+
+The *opt-in* module `hibernate-stack` records the call stack at `org.hibernate.Transaction.begin` and `commit` and emits it as a span.
+The stack is thread-local, so it reveals the caller chain even when the trace link was lost: `begin` shows who opened the unit of work, `commit` shows who forced the write.
+
+[source,bash]
+----
+-Dotel.instrumentation.hibernate-stack.enabled=true
+----
+
+Each fired transaction then produces a `hibernate.tx.begin` / `hibernate.tx.commit` span with `code.function` and `code.stacktrace` (the caller chain, one `at ...` frame per line).
+Cap the recorded depth with `-Dosgi.capture.stack.max=N` (default 32).
+The `samples/` scripts expose it as `OSGI_OTEL_TRACE_TX_STACK=true`.
+
+NOTE: The module needs no Hibernate dependency and touches no Hibernate type - it matches `org.hibernate.Transaction` by name only, so hosts without Hibernate are simply never matched.
+
 == Quick start
 
 . Build everything and assemble `dist/` (agent + both extension JARs):
@@ -175,6 +193,10 @@ Domain data (PII) - opt-in.
 |`osgi.capture.selection.label.max`
 |`64`
 |Maximum number of characters of the selection label to record; longer values are truncated.
+
+|`osgi.capture.stack.max`
+|`32`
+|Maximum number of stack frames recorded by the `hibernate-stack` diagnostic in `code.stacktrace`.
 
 |`osgi.filter.cross-bundle-only`
 |`false`
