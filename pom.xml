@@ -71,7 +71,7 @@
         <autoservice.version>1.1.1</autoservice.version>
 
         <junit.version>5.11.3</junit.version>
-        <assertj.version>3.26.3</assertj.version>
+        <assertj.version>3.27.7</assertj.version>
 
         <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
         <maven.surefire.plugin.version>3.5.2</maven.surefire.plugin.version>
