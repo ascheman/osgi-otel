@@ -80,6 +80,7 @@
         <maven.dependency.plugin.version>3.8.1</maven.dependency.plugin.version>
         <maven.bundle.plugin.version>5.1.9</maven.bundle.plugin.version>
         <maven.jar.plugin.version>3.4.2</maven.jar.plugin.version>
+        <maven.enforcer.plugin.version>3.5.0</maven.enforcer.plugin.version>
 
         <github.repo>osgi-otel</github.repo>
     </properties>
@@ -252,7 +253,37 @@
                     <version>${maven.bundle.plugin.version}</version>
                     <extensions>true</extensions>
                 </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-enforcer-plugin</artifactId>
+                    <version>${maven.enforcer.plugin.version}</version>
+                </plugin>
             </plugins>
         </pluginManagement>
+        <plugins>
+            <!-- Build must run on Maven 3.9.x: Maven 4 binds incompatible beta
+                 core plugins (e.g. maven-install-plugin:4.0.0-beta-3). Use ./mvnw. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>enforce-maven-version</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireMavenVersion>
+                                    <version>[3.9,4.0)</version>
+                                    <message>Build with Maven 3.9.x via ./mvnw; Maven 4 is not supported (incompatible beta core plugins).</message>
+                                </requireMavenVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
 </project>

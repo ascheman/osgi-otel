@@ -126,8 +126,8 @@ NOTE: The module needs no Hibernate dependency and touches no Hibernate type - i
 +
 [source,bash]
 ----
-mvn -B install -DskipTests
-mvn -B dependency:copy \
+./mvnw -B install -DskipTests
+./mvnw -B dependency:copy \
   -Dartifact=io.opentelemetry.javaagent:opentelemetry-javaagent:2.27.0 \
   -DoutputDirectory=dist -Dmdep.stripVersion=true
 cp osgi-otel-extension/target/osgi-otel-extension-0.1.0-SNAPSHOT.jar dist/
