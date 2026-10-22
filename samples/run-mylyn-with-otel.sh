@@ -49,6 +49,11 @@ OSGI_OTEL_TRACE_EVENTS="${OSGI_OTEL_TRACE_EVENTS:-}"
 # begin/commit (code.stacktrace), to reveal what triggered an orphan transaction.
 OSGI_OTEL_TRACE_TX_STACK="${OSGI_OTEL_TRACE_TX_STACK:-}"
 
+# OpenTelemetry Java agent version (only referenced in the build hint below;
+# keep in sync with otel.javaagent.version in the parent pom). Prefixed
+# OSGI_OTEL_ per the namespace convention above (never bare OTEL_*).
+OSGI_OTEL_AGENT_VERSION="2.32.0"
+
 AGENT_JAR="${OSGI_OTEL_HOME}/dist/opentelemetry-javaagent.jar"
 INSTRUMENTATION_JAR="${OSGI_OTEL_HOME}/dist/osgi-otel-extension-0.1.0-SNAPSHOT.jar"
 FILE_EXPORTER_JAR="${OSGI_OTEL_HOME}/dist/osgi-otel-file-exporter-0.1.0-SNAPSHOT.jar"
@@ -61,8 +66,8 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 [[ -x "${OSGI_OTEL_ECLIPSE_BIN}" ]] || die "Eclipse binary not found or not executable: ${OSGI_OTEL_ECLIPSE_BIN}"
 [[ -f "${AGENT_JAR}" ]] || die "OTel agent JAR not found: ${AGENT_JAR}
 Run from ${OSGI_OTEL_HOME}:
-  mvn -B install -DskipTests
-  mvn -B dependency:copy -Dartifact=io.opentelemetry.javaagent:opentelemetry-javaagent:2.27.0 -DoutputDirectory=dist -Dmdep.stripVersion=true
+  ./mvnw -B install -DskipTests
+  ./mvnw -B dependency:copy -Dartifact=io.opentelemetry.javaagent:opentelemetry-javaagent:${OSGI_OTEL_AGENT_VERSION} -DoutputDirectory=dist -Dmdep.stripVersion=true
   cp osgi-otel-extension/target/osgi-otel-extension-0.1.0-SNAPSHOT.jar dist/
   cp osgi-otel-file-exporter/target/osgi-otel-file-exporter-0.1.0-SNAPSHOT.jar dist/"
 [[ -f "${INSTRUMENTATION_JAR}" ]] || die "Instrumentation extension JAR not found: ${INSTRUMENTATION_JAR}"

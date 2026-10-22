@@ -28,18 +28,28 @@ Parent: `net.aschemann.otel:osgi-otel-parent:0.1.0-SNAPSHOT` (root `pom.xml`).
 ## Build, test, run
 
 ```bash
-mvn -B verify                 # full build + integration test (the CI command)
-mvn -B install -DskipTests    # build, then assemble dist/ (see README "Quick start")
+./mvnw -B verify                 # full build + integration test (the CI command)
+./mvnw -B install -DskipTests    # build, then assemble dist/ (see README "Quick start")
 samples/run-with-otel.template.sh   # generic launcher; set OSGI_OTEL_APP_LAUNCHER
 samples/run-mylyn-with-otel.sh      # worked Eclipse/Mylyn example
 ```
+
+**Always build via `./mvnw`** (Maven wrapper pinned to **3.9.16**). Maven 4 binds
+incompatible beta core plugins (e.g. `maven-install-plugin:4.0.0-beta-3` fails the
+install phase), so `maven-enforcer-plugin` requires Maven `[3.9,4.0)` and a bare
+`mvn` on Maven 4 fails fast. A general alpha/beta dependency ban is *not* enforced
+(bannedDependencies treats wildcard versions as match-all, so a `-alpha` suffix ban
+would ban everything). The only accepted pre-release deps are OpenTelemetry's
+javaagent extension-API/tooling/testing artifacts (`io.opentelemetry*:*-alpha`),
+which OTel publishes only with an `-alpha` suffix and which are `provided`/`test`
+only (the shipped agent is GA) — documented at the `otel.*.alpha` property.
 
 `samples/` holds the launcher scripts (generic template + Mylyn example) and
 `samples/README.adoc`. The extension itself is configured only via `-D` system
 properties (`otel.*`, `osgi.filter.*`); the `OSGI_OTEL_*` env vars are a
 launcher-script convenience and all optional.
 
-- CI (`.github/workflows/build.yml`) runs `mvn -B verify` on **JDK 21 (Temurin)**.
+- CI (`.github/workflows/build.yml`) runs `./mvnw -B verify` on **JDK 21 (Temurin)**.
 - Deploy: the `github` profile auto-activates when `GITHUB_TOKEN` is set (also
   needs `GITHUB_LOGIN`), publishing all four modules to GitHub Packages at
   `maven.pkg.github.com/ascheman/osgi-otel`.
@@ -108,12 +118,16 @@ launcher-script convenience and all optional.
 - **License header** (Apache 2.0, "Copyright 2026 Gerd Aschemann") goes on every
   Java file — match the existing 4-line header.
 - `README.adoc` is AsciiDoc: one sentence per line, `*`/`**` lists, `[source,…]`
-  blocks — not Markdown.
+  blocks — not Markdown. The OTel agent version is single-sourced via the
+  `:otel-agent-version:` document attribute; code blocks that reference it carry
+  `subs="attributes+"` (the trailing-`+` form — the leading-`+` form is not
+  substituted under the rouge highlighter). Keep it in sync with the pom.
 
 ## Git
 
-- **No commits exist yet** — the whole tree is still untracked. First commit will
-  establish history.
+- **Branch workflow:** work on **`develop`**; merge to **`main`** only when the
+  state is stable. Further work may use `feature/*` or `bugfix/*` branches off
+  `develop`. CI deploys to GitHub Packages only on pushes to `main`.
 - This is a **personal** project (`net.aschemann.otel`). Commit author is
   **Gerd Aschemann <gerd@aschemann.net>** (matches `<developers>` in the parent
   pom) — *not* the Apache identity used for jQAssistant/Maven work.

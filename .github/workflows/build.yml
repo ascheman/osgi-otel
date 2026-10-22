@@ -29,14 +29,16 @@ jobs:
           settings-path: ${{ github.workspace }}
 
       - name: Build and test
-        run: mvn -B verify
+        run: ./mvnw -B verify
 
       - name: Publish test results
-        uses: dorny/test-reporter@df6247429542221bc30d46a036ee47af1102c451 # v2
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
         if: always()
         with:
           name: Test Results
-          path: '**/target/surefire-reports/*.xml,**/target/failsafe-reports/*.xml'
+          # Only the per-test JUnit reports; NOT failsafe-summary.xml, which is a
+          # summary file (not a JUnit report) that crashes dorny/test-reporter.
+          path: '**/target/surefire-reports/TEST-*.xml,**/target/failsafe-reports/TEST-*.xml'
           reporter: java-junit
 
       - name: Deploy to GitHub Packages
@@ -44,4 +46,4 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: mvn -B -s "${{ github.workspace }}/settings.xml" deploy -DskipTests
+        run: ./mvnw -B -s "${{ github.workspace }}/settings.xml" deploy -DskipTests
