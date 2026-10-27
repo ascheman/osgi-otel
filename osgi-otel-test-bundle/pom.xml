@@ -36,7 +36,7 @@
                         <Bundle-SymbolicName>net.aschemann.otel.osgi.testbundle</Bundle-SymbolicName>
                         <Bundle-Name>OSGi OTel Test Bundle</Bundle-Name>
                         <Bundle-Activator>net.aschemann.otel.osgi.testbundle.Activator</Bundle-Activator>
-                        <Export-Package>net.aschemann.otel.osgi.testbundle.api</Export-Package>
+                        <Export-Package>net.aschemann.otel.osgi.testbundle.api,net.aschemann.otel.osgi.testbundle.controller</Export-Package>
                         <Private-Package>net.aschemann.otel.osgi.testbundle,net.aschemann.otel.osgi.testbundle.internal</Private-Package>
                     </instructions>
                 </configuration>
