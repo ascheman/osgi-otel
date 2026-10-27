@@ -49,6 +49,20 @@ OSGI_OTEL_TRACE_EVENTS="${OSGI_OTEL_TRACE_EVENTS:-}"
 # begin/commit (code.stacktrace), to reveal what triggered an orphan transaction.
 OSGI_OTEL_TRACE_TX_STACK="${OSGI_OTEL_TRACE_TX_STACK:-}"
 
+# Application layer spans (opt-in): span every method of the classes matched by
+# the rules, to make layer boundaries visible when calls bypass the OSGi
+# service registry. Format: prefix:matcher,... - a matcher without any of the
+# regex metacharacters *+?()[]{}|^\ is a base class FQCN (that class and all
+# its subtypes), anything else is a regex searched in the class name. The
+# module stays off while this is empty.
+OSGI_OTEL_APP_SPAN_RULES="${OSGI_OTEL_APP_SPAN_RULES:-}"
+# Method-name regex (full match) excluded from instrumentation; the extension
+# defaults to ^(toString|hashCode|equals|getClass)$ when unset.
+OSGI_OTEL_APP_SPAN_EXCLUDE_METHODS="${OSGI_OTEL_APP_SPAN_EXCLUDE_METHODS:-}"
+# false drops the osgi.caller.bundle attribute and the per-call stack walk that
+# resolves it - the escape hatch when a broad rule costs too much.
+OSGI_OTEL_APP_SPAN_CALLER_BUNDLE="${OSGI_OTEL_APP_SPAN_CALLER_BUNDLE:-}"
+
 # OpenTelemetry Java agent version (only referenced in the build hint below;
 # keep in sync with otel.javaagent.version in the parent pom). Prefixed
 # OSGI_OTEL_ per the namespace convention above (never bare OTEL_*).
@@ -147,6 +161,25 @@ if [[ "${OSGI_OTEL_TRACE_TX_STACK}" == "true" ]]; then
     TX_STACK_VMARG="-Dotel.instrumentation.hibernate-stack.enabled=true"
 fi
 
+# --- Application layer span VM args (only set when rules are configured) ---
+
+# The app-span module is enabled by its rules, so the two refinements are only
+# worth passing when rules are actually set.
+APP_SPAN_VMARGS=()
+APP_SPAN_INFO="off"
+if [[ -n "${OSGI_OTEL_APP_SPAN_RULES}" ]]; then
+    APP_SPAN_VMARGS+=("-Dotel.app.span.rules=${OSGI_OTEL_APP_SPAN_RULES}")
+    APP_SPAN_INFO="rules=${OSGI_OTEL_APP_SPAN_RULES}"
+    if [[ -n "${OSGI_OTEL_APP_SPAN_EXCLUDE_METHODS}" ]]; then
+        APP_SPAN_VMARGS+=("-Dotel.app.span.exclude-methods=${OSGI_OTEL_APP_SPAN_EXCLUDE_METHODS}")
+        APP_SPAN_INFO="${APP_SPAN_INFO}, exclude-methods=${OSGI_OTEL_APP_SPAN_EXCLUDE_METHODS}"
+    fi
+    if [[ -n "${OSGI_OTEL_APP_SPAN_CALLER_BUNDLE}" ]]; then
+        APP_SPAN_VMARGS+=("-Dotel.app.span.caller-bundle=${OSGI_OTEL_APP_SPAN_CALLER_BUNDLE}")
+        APP_SPAN_INFO="${APP_SPAN_INFO}, caller-bundle=${OSGI_OTEL_APP_SPAN_CALLER_BUNDLE}"
+    fi
+fi
+
 # --- Summary --------------------------------------------------------------
 
 cat <<EOF
@@ -164,6 +197,7 @@ Launching Eclipse (Mylyn) with OpenTelemetry instrumentation
   Service name:  ${OSGI_OTEL_SERVICE_NAME}
   Exporter:      ${EXPORTER_INFO}
   Bundle filter: ${FILTER_INFO}
+  App spans:     ${APP_SPAN_INFO}
 ==============================================================================
 EOF
 
@@ -185,6 +219,7 @@ exec "${OSGI_OTEL_ECLIPSE_BIN}" \
     ${FILTER_VMARGS[@]+"${FILTER_VMARGS[@]}"} \
     ${EVENTS_VMARG:+"${EVENTS_VMARG}"} \
     ${TX_STACK_VMARG:+"${TX_STACK_VMARG}"} \
+    ${APP_SPAN_VMARGS[@]+"${APP_SPAN_VMARGS[@]}"} \
     -Dotel.metrics.exporter=none \
     -Dotel.logs.exporter=none \
     ${OSGI_OTEL_EXTRA_VMARGS}

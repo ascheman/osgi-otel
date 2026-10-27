@@ -10,6 +10,32 @@ permissions:
   packages: write
 
 jobs:
+  # The sample launchers are not part of the Maven reactor, so `mvnw verify`
+  # says nothing about them. Without this job their 300+ lines of shell - the
+  # agent wiring every user starts the extension through - are the only
+  # unverified logic in the repository.
+  lint-scripts:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Check the sample launchers
+        # -S warning on purpose: style-level findings are advice, not a reason
+        # to fail the build. Raise it if the scripts ever get noisy.
+        run: |
+          if ! command -v shellcheck >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq shellcheck
+          fi
+          shellcheck --version
+          for script in samples/*.sh; do
+            bash -n "$script"
+          done
+          shellcheck -S warning samples/*.sh
+
   build:
     runs-on: ubuntu-latest
     steps:

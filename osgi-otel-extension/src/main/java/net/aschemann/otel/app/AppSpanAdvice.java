@@ -6,6 +6,7 @@ package net.aschemann.otel.app;
 
 import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanBuilder;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Scope;
@@ -53,13 +54,18 @@ public class AppSpanAdvice {
 
         String runtimeSimple = runtimeSimpleName(instance, typeName);
         Tracer tracer = GlobalOpenTelemetry.getTracer(INSTRUMENTATION_NAME);
-        span = tracer.spanBuilder(rule + " " + runtimeSimple + "." + methodName)
+        SpanBuilder builder = tracer.spanBuilder(rule + " " + runtimeSimple + "." + methodName)
                 .setAttribute("app.span.rule", rule)
                 .setAttribute("code.function", typeName + "." + methodName)
                 .setAttribute("code.namespace", packageName(typeName))
-                .setAttribute("osgi.provider.bundle", providerBundle(typeName, instance))
-                .setAttribute("osgi.caller.bundle", callerBundle(typeName, instance))
-                .startSpan();
+                .setAttribute("osgi.provider.bundle", providerBundle(typeName, instance));
+        // Resolving the caller costs a stack snapshot per call; skipping the
+        // branch leaves the attribute off entirely rather than reporting a
+        // placeholder that cannot be told apart from a failed lookup.
+        if (AppSpanConfig.callerBundleEnabled()) {
+            builder = builder.setAttribute("osgi.caller.bundle", callerBundle(typeName, instance));
+        }
+        span = builder.startSpan();
         scope = span.makeCurrent();
     }
 
@@ -113,7 +119,15 @@ public class AppSpanAdvice {
      * the instrumented method. Best-effort by design - the caller class is
      * only resolvable when it is visible in the instrumented class's
      * classloader; anything else (including reflective calls) yields
-     * {@code unknown}. Results are cached per caller class.
+     * {@code unknown}.
+     *
+     * <p>Only the classloader-to-bundle lookup is cached, per caller class;
+     * the {@link Thread#getStackTrace()} snapshot happens on every call and
+     * cannot be cached away. A {@code StackWalker} would be cheaper but
+     * needs Java 9, and this extension targets Java 8 so that it can be
+     * loaded into older hosts. Switch the attribute off with
+     * {@code otel.app.span.caller-bundle=false} when a broad rule makes this
+     * too expensive.
      */
     public static String callerBundle(String typeName, Object instance) {
         StackTraceElement[] frames = Thread.currentThread().getStackTrace();

@@ -76,9 +76,25 @@ The `OSGI_OTEL_` prefix avoids collisions with the OpenTelemetry SDK's own `OTEL
 |unset
 |`true` enables the opt-in `hibernate-stack` diagnostic (call stack at Hibernate `Transaction` begin/commit).
 
+|`OSGI_OTEL_APP_SPAN_RULES`
+|unset
+|Enables the opt-in `app-span` module: comma-separated `prefix:matcher` entries (`-Dotel.app.span.rules`).
+A matcher without any of the regex metacharacters `* + ? ( ) [ ] { } | ^ \` is a base class FQCN and matches that class and all of its subtypes; anything else is a regex searched in the class name.
+
+|`OSGI_OTEL_APP_SPAN_EXCLUDE_METHODS`
+|unset
+|Method-name regex (full match) to leave uninstrumented (`-Dotel.app.span.exclude-methods`).
+Only passed when `OSGI_OTEL_APP_SPAN_RULES` is set; the extension's own default is `^(toString|hashCode|equals|getClass)$`.
+
+|`OSGI_OTEL_APP_SPAN_CALLER_BUNDLE`
+|unset
+|`false` drops the `osgi.caller.bundle` attribute and the per-call stack walk that resolves it (`-Dotel.app.span.caller-bundle`).
+Only passed when `OSGI_OTEL_APP_SPAN_RULES` is set.
+
 |`OSGI_OTEL_EXTRA_VMARGS`
 |empty
 |Extra `-D...` args appended verbatim.
+Use this for the properties the scripts do not wrap, e.g. `osgi.capture.widget.text` or `otel.instrumentation.eclipse-ui.enabled`.
 |===
 
 === `run-with-otel.template.sh` only

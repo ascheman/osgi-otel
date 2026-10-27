@@ -20,9 +20,12 @@ final class AppSpanRule {
     /**
      * Metacharacters that make a matcher a regex. {@code .} and {@code $} are
      * deliberately not counted: they are legal characters in a fully
-     * qualified class name.
+     * qualified class name. The backslash is counted, because it cannot occur
+     * in a class name at all - without it, an exact-class regex written with
+     * escaped dots ({@code com\.example\.Foo}) would be taken for a base
+     * class of that literal name and could never match anything.
      */
-    private static final String REGEX_METACHARACTERS = "*+?()[]{}|^";
+    private static final String REGEX_METACHARACTERS = "*+?()[]{}|^\\";
 
     private final String prefix;
     private final String matcher;

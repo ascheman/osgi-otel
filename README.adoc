@@ -65,7 +65,7 @@ Two instrumentation modules - `osgi-bundle-context` (OSGi service lookups) and `
 
 |`app-span` (opt-in, rule-based)
 |Any method whose declaring class matches an `otel.app.span.rules` entry (base class or FQCN regex)
-|`<rule> <RuntimeClass>.<method>`; `app.span.rule`, `code.function`, `code.namespace`, `osgi.provider.bundle`, `osgi.caller.bundle`
+|`<rule> <RuntimeClass>.<method>`; `app.span.rule`, `code.function`, `code.namespace`, `osgi.provider.bundle`, `osgi.caller.bundle` (switchable)
 |===
 
 The `eclipse-ui` module opens a span for each user gesture and makes it current for the duration of the handler/action.
@@ -104,13 +104,18 @@ The `app-span` module closes this gap without touching the application code: you
 
 |`otel.app.span.rules`
 |Comma-separated `prefix:matcher` entries; the module is enabled only when at least one rule is set.
-A matcher without any of the regex metacharacters `* + ? ( ) [ ] { } | ^` is a *base class*: the rule matches that class and all of its subtypes (dots and `$` are legal in class names and are not metacharacters).
+A matcher without any of the regex metacharacters `* + ? ( ) [ ] { } | ^ \` is a *base class*: the rule matches that class and all of its subtypes (dots and `$` are legal in class names and are not metacharacters, a backslash is).
 Any other matcher is a Java regex searched (`find()`) in the fully qualified class name.
 The first matching rule wins.
+Because the entries are comma-separated, a matcher cannot contain a comma, so a regex quantifier such as `{2,3}` is not expressible.
 
 |`otel.app.span.exclude-methods`
 |Java regex (full match, default `^(toString|hashCode|equals|getClass)$`).
 Matching methods are not instrumented at all.
+
+|`otel.app.span.caller-bundle`
+|`true` by default.
+`false` drops the `osgi.caller.bundle` attribute and the per-call stack walk that resolves it (see the note below).
 
 |`otel.instrumentation.app-span.enabled`
 |Standard OTel switch; `false` disables the module even when rules are set.
@@ -123,6 +128,21 @@ Each span is named `<prefix> <RuntimeClass>.<method>` (the *runtime* class of th
 `code.namespace`:: The declaring class's package.
 `osgi.provider.bundle`:: The bundle providing the instrumented class (the classloader's bundle, when it is an OSGi wiring).
 `osgi.caller.bundle`:: The bundle of the direct caller, resolved best-effort from the stack (the first caller frame whose class is loadable in the instrumented class's classloader); `unknown` when unresolvable - e.g. reflective calls, or a caller in a bundle the instrumented bundle does not see.
+Omitted entirely when `otel.app.span.caller-bundle=false`.
+
+[CAUTION]
+====
+Resolving `osgi.caller.bundle` takes a full stack snapshot on every instrumented call.
+Only the classloader-to-bundle lookup is cached, so the snapshot cost cannot be cached away, and a broad rule puts it on the application's hot path.
+A cheaper `StackWalker` needs Java 9 while this extension targets Java 8, so the escape hatch is `otel.app.span.caller-bundle=false`.
+====
+
+[WARNING]
+====
+A rule whose matcher is a regex disables the classloader optimization for the whole module: every class in every classloader is then handed to the type matcher.
+If a base-class rule is configured as well, each of those classes gets a full superclass-and-interface walk at class-load time.
+This has not been measured on a large Eclipse product yet - watch the startup time when enabling broad rules.
+====
 
 Example (generic; adapt the class names to your application):
 
@@ -262,6 +282,10 @@ The module is enabled only when set (see <<app-span-rules>>).
 |`^(toString|hashCode|equals|getClass)$`
 |`app-span`: method-name regex (full match) of methods to leave uninstrumented.
 
+|`otel.app.span.caller-bundle`
+|`true`
+|`app-span`: `false` drops the `osgi.caller.bundle` attribute and its per-call stack walk.
+
 |`osgi.filter.cross-bundle-only`
 |`false`
 |`true` drops spans where caller and provider are the same bundle.
@@ -277,9 +301,15 @@ Span emitted only if caller OR provider matches.
 Span dropped only if caller AND provider both match.
 |===
 
-NOTE: The `osgi.filter.*` and `otel.app.span.*` properties are read once at extension load time, so a JVM restart is required to change them.
+[NOTE]
+====
+The `osgi.filter.*` and `otel.app.span.*` properties are read once at extension load time, so a JVM restart is required to change them.
+They are read from Java *system properties only*.
+The advice-side copy of the configuration cannot reach the agent's `ConfigProperties`, so the usual `OTEL_*` environment variables and OTel config files do not configure them - pass them as `-D` flags.
+====
 
-The launcher scripts under `samples/` wrap these properties behind convenience `OSGI_OTEL_*` environment variables (all optional) - see `samples/README.adoc`.
+The launcher scripts under `samples/` wrap the most frequently used of these properties behind convenience `OSGI_OTEL_*` environment variables (all optional) - see `samples/README.adoc`.
+The remaining ones, among them the `osgi.capture.*` opt-ins and the per-module `otel.instrumentation.*.enabled` switches, are passed through `OSGI_OTEL_EXTRA_VMARGS` verbatim.
 
 == Bundle filter examples
 
@@ -621,7 +651,7 @@ echo "Distinct services:  $(jq -r '.attributes["osgi.service.class"] // empty' t
 mvn -B verify
 ----
 
-Runs unit tests (none yet) and the integration tests in `osgi-otel-it`.
+Runs the unit tests in `osgi-otel-extension` (`AppSpanRuleTest`, `AppSpanConfigTest`: rule parsing, matcher classification, first-match-wins, exclude patterns) and the integration tests in `osgi-otel-it`.
 They start an embedded Equinox 3.15.300 with the OpenTelemetry `agent-for-testing` attached, install the test bundle, and assert on the captured spans: `BundleContextGetServiceIT` for the `BundleContext.getService` span, `AppSpanIT` for the rule-based `app-span` spans (nested controller/service spans, excluded methods absent).
 
 == Deployment
