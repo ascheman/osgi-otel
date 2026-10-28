@@ -92,6 +92,16 @@
         <maven.enforcer.plugin.version>3.5.0</maven.enforcer.plugin.version>
 
         <github.repo>osgi-otel</github.repo>
+
+        <!-- Release-only plugins, used by the `release` profile. -->
+        <maven.source.plugin.version>3.4.0</maven.source.plugin.version>
+        <maven.javadoc.plugin.version>3.12.0</maven.javadoc.plugin.version>
+        <maven.gpg.plugin.version>3.2.8</maven.gpg.plugin.version>
+        <jreleaser.maven.plugin.version>1.26.0</jreleaser.maven.plugin.version>
+        <!-- Trailing '!' pins this exact key; without it GnuPG may pick another
+             key from the keyring. Override with -Dgpg.keyname=... to release
+             from a different one. -->
+        <gpg.keyname>D6D79905C2FDD3E4FA6C13A9F3182FD01BA43E49!</gpg.keyname>
     </properties>
 
     <dependencyManagement>
@@ -198,28 +208,157 @@
         </dependencies>
     </dependencyManagement>
 
+    <!--
+      Snapshots from a local working copy go to the Central Portal, the same
+      place the release lands. CI overrides this in the `github-ci` profile.
+    -->
+    <distributionManagement>
+        <snapshotRepository>
+            <id>central-snapshots</id>
+            <name>Central Portal Snapshots</name>
+            <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+        </snapshotRepository>
+    </distributionManagement>
+
     <profiles>
         <profile>
-            <id>github</id>
+            <!--
+              CI publishes SNAPSHOTs to GitHub Packages in addition to the
+              Central Portal snapshots deployed from a local working copy.
+              Activated by GITHUB_ACTIONS, which GitHub Actions sets and a local
+              shell does not - unlike GITHUB_TOKEN, which the local direnv setup
+              also exports and which would therefore hijack local deploys.
+              A profile's distributionManagement overrides the project-level one
+              for the same element, so this wins inside Actions only.
+            -->
+            <id>github-ci</id>
             <activation>
                 <property>
-                    <name>env.GITHUB_TOKEN</name>
+                    <name>env.GITHUB_ACTIONS</name>
                 </property>
             </activation>
             <distributionManagement>
                 <snapshotRepository>
                     <id>github</id>
                     <name>GitHub Packages</name>
-                    <!--suppress UnresolvedMavenProperty -->
-                    <url>https://maven.pkg.github.com/${env.GITHUB_LOGIN}/${github.repo}</url>
+                    <!--
+                      One package repository per GitHub repository, not per
+                      module: ${project.artifactId} would send every module to a
+                      URL of its own, and only osgi-otel exists.
+                    -->
+                    <url>https://maven.pkg.github.com/ascheman/${github.repo}</url>
                 </snapshotRepository>
-                <repository>
-                    <id>github</id>
-                    <name>GitHub Packages</name>
-                    <!--suppress UnresolvedMavenProperty -->
-                    <url>https://maven.pkg.github.com/${env.GITHUB_LOGIN}/${github.repo}</url>
-                </repository>
             </distributionManagement>
+        </profile>
+
+        <profile>
+            <!--
+              Release from a local working copy, so that signing uses the local
+              GnuPG agent and the private key never leaves this machine:
+
+                  ./mvnw -Prelease clean deploy
+                  ./mvnw -Prelease jreleaser:full-release
+
+              The first command builds, signs and stages everything into
+              ${staging.repository.directory}; the second uploads that staging
+              repository to Maven Central and creates the GitHub release.
+
+              Credentials come from the environment, never from the repository:
+              JRELEASER_GITHUB_TOKEN plus JRELEASER_MAVENCENTRAL_USERNAME and
+              JRELEASER_MAVENCENTRAL_PASSWORD (the Central Portal user token, not
+              the account password). JReleaser itself is configured in jreleaser.yml.
+            -->
+            <id>release</id>
+            <properties>
+                <staging.repository.directory>${project.build.directory}/staging-deploy</staging.repository.directory>
+            </properties>
+            <distributionManagement>
+                <!--
+                  Deploy to a local directory rather than to a remote repository.
+                  JReleaser picks the artifacts up from here, which keeps the upload
+                  a separate, repeatable step: a failed upload does not require a rebuild.
+                -->
+                <repository>
+                    <id>staging</id>
+                    <url>file://${staging.repository.directory}</url>
+                </repository>
+                <!--
+                  Also the snapshot element: a profile's distributionManagement
+                  is merged with the one outside it element by element, so
+                  without this a -Prelease deploy on a still-SNAPSHOT version
+                  would fall through to the snapshot repository and leave the
+                  staging directory empty.
+                -->
+                <snapshotRepository>
+                    <id>staging</id>
+                    <url>file://${staging.repository.directory}</url>
+                </snapshotRepository>
+            </distributionManagement>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>${maven.source.plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>${maven.javadoc.plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${maven.gpg.plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                                <configuration>
+                                    <keyname>${gpg.keyname}</keyname>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.jreleaser</groupId>
+                        <artifactId>jreleaser-maven-plugin</artifactId>
+                        <version>${jreleaser.maven.plugin.version}</version>
+                        <inherited>false</inherited>
+                        <configuration>
+                            <!--
+                              Required. The Maven plugin does NOT pick up
+                              jreleaser.yml by itself: without configFile it
+                              builds its model from this POM instead
+                              (AbstractJReleaserMojo: `null == configFile ?
+                              convertModel() : readModel(logger)`), silently
+                              ignoring the file. The symptom is not an error
+                              but "[maven] Deploying is not enabled. Skipping",
+                              because the whole deploy section is then absent
+                              from the model. Check the log for
+                              "Configuring with .../jreleaser.yml".
+                            -->
+                            <configFile>${project.basedir}/jreleaser.yml</configFile>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
         </profile>
     </profiles>
 

@@ -18,6 +18,13 @@
         instrumented BundleContext.getService call.
     </description>
 
+    <properties>
+        <!-- Fixture for the integration tests, not part of the published API:
+             it must not end up on Maven Central, where a version can never be
+             withdrawn. Built and installed locally so osgi-otel-it can use it. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.osgi</groupId>

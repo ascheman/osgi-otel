@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   # The sample launchers are not part of the Maven reactor, so `mvnw verify`
@@ -48,11 +47,6 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
           cache: maven
-          # Generates a fresh settings.xml in the workspace with a <server id="github">
-          # (username=GITHUB_ACTOR, password=GITHUB_TOKEN, both auto-provided), so the
-          # deploy step can authenticate against GitHub Packages.
-          server-id: github
-          settings-path: ${{ github.workspace }}
 
       - name: Build and test
         run: ./mvnw -B verify
@@ -66,14 +60,3 @@ jobs:
           # summary file (not a JUnit report) that crashes dorny/test-reporter.
           path: '**/target/surefire-reports/TEST-*.xml,**/target/failsafe-reports/TEST-*.xml'
           reporter: java-junit
-
-      - name: Deploy to GitHub Packages
-        # Publish snapshots only from main pushes, not from PRs or feature branches.
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Substituted into the distributionManagement URL in the parent pom's
-          # `github` profile (https://maven.pkg.github.com/${env.GITHUB_LOGIN}/...);
-          # without it the literal ${env.GITHUB_LOGIN} breaks the deploy URL.
-          GITHUB_LOGIN: ${{ github.repository_owner }}
-        run: ./mvnw -B -s "${{ github.workspace }}/settings.xml" deploy -DskipTests
