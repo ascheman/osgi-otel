@@ -23,6 +23,11 @@
              it must not end up on Maven Central, where a version can never be
              withdrawn. Built and installed locally so osgi-otel-it can use it. -->
         <maven.deploy.skip>true</maven.deploy.skip>
+        <!-- Nothing is published, so signing it and building sources and
+             javadoc for it is wasted work (and a wasted GPG prompt). -->
+        <gpg.skip>true</gpg.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
     </properties>
 
     <dependencies>

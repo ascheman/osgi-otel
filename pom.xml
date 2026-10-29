@@ -270,7 +270,14 @@
             -->
             <id>release</id>
             <properties>
-                <staging.repository.directory>${project.build.directory}/staging-deploy</staging.repository.directory>
+                <!--
+                  The reactor root, NOT ${project.build.directory}: that resolves
+                  per module, so every module would stage into its own
+                  <module>/target/staging-deploy and JReleaser - which reads the
+                  single directory named in jreleaser.yml - would upload the
+                  parent POM alone and report success.
+                -->
+                <staging.repository.directory>${maven.multiModuleProjectDirectory}/target/staging-deploy</staging.repository.directory>
             </properties>
             <distributionManagement>
                 <!--

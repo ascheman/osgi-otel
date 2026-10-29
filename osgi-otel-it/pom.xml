@@ -26,6 +26,12 @@
              installed nor deployed (paired with maven-jar-plugin skipIfEmpty). -->
         <maven.install.skip>true</maven.install.skip>
         <maven.deploy.skip>true</maven.deploy.skip>
+        <!-- Without a main artifact there is nothing for the `release` profile
+             to sign or to derive sources and javadoc from; gpg:sign fails
+             outright with "The project artifact has not been assembled yet". -->
+        <gpg.skip>true</gpg.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
     </properties>
 
     <dependencies>
