@@ -50,8 +50,15 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
-        <maven.compiler.source>1.8</maven.compiler.source>
-        <maven.compiler.target>1.8</maven.compiler.target>
+        <!--
+          release, not source/target: source/target only sets the language level
+          and still compiles against the JDK that happens to run the build, so a
+          post-8 API call compiles cleanly here and fails with NoSuchMethodError
+          on the Java 8 hosts this extension targets. release pins the API
+          surface as well, and drops javac's "bootstrap class path is not set"
+          warning, which was the symptom of exactly that gap.
+        -->
+        <maven.compiler.release>8</maven.compiler.release>
 
         <otel.javaagent.version>2.32.0</otel.javaagent.version>
         <otel.instrumentation.version>2.32.0</otel.instrumentation.version>
