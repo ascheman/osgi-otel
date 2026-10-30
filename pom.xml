@@ -76,7 +76,7 @@
         <!-- Compile-only (provided): only stable API is used and the host supplies
              its own version at runtime. Kept at Java-11 bytecode so the extension
              builds on any JDK >= 11, matching the Java-8 runtime target. -->
-        <eclipse.commands.version>3.11.100</eclipse.commands.version>
+        <eclipse.commands.version>3.13.0</eclipse.commands.version>
         <eclipse.jface.version>3.26.0</eclipse.jface.version>
         <emf.common.version>2.26.0</emf.common.version>
 
