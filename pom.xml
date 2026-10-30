@@ -94,7 +94,7 @@
         <maven.failsafe.plugin.version>3.5.2</maven.failsafe.plugin.version>
         <maven.shade.plugin.version>3.6.0</maven.shade.plugin.version>
         <maven.dependency.plugin.version>3.11.0</maven.dependency.plugin.version>
-        <maven.bundle.plugin.version>5.1.9</maven.bundle.plugin.version>
+        <maven.bundle.plugin.version>6.2.0</maven.bundle.plugin.version>
         <maven.jar.plugin.version>3.5.1</maven.jar.plugin.version>
         <maven.enforcer.plugin.version>3.5.0</maven.enforcer.plugin.version>
         <!-- Lifecycle plugins that are never declared explicitly. Pinned because
