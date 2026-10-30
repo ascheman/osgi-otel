@@ -83,7 +83,7 @@
         <!-- Must match the byte-buddy that the OTel agent bundles at runtime
              (byte-buddy is provided): opentelemetry-javaagent 2.32.0 ships
              byte-buddy-dep 1.18.14. Do not bump independently of the agent. -->
-        <bytebuddy.version>1.18.14</bytebuddy.version>
+        <bytebuddy.version>1.18.16</bytebuddy.version>
         <autoservice.version>1.1.1</autoservice.version>
 
         <junit.version>5.14.4</junit.version>
