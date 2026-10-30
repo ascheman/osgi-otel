@@ -20,10 +20,10 @@ Parent: `net.aschemann.otel:osgi-otel-parent:0.1.0-SNAPSHOT` (root `pom.xml`).
 
 | Module | Purpose |
 |---|---|
-| `osgi-otel-extension` | The agent extension. Four `InstrumentationModule`s (pkg `net.aschemann.otel.*`): `osgi-bundle-context` (`BundleContext.getService`), `eclipse-ui` (`Command.executeWithChecks` + JFace `IAction.run`/`runWithEvent`), `eclipse-events` (**opt-in**, default-off diagnostic: EMF `eNotify` + JavaBeans `firePropertyChange` → per-event spans for cascade depth/width/timing), and `hibernate-stack` (**opt-in**, default-off diagnostic: `org.hibernate.Transaction.begin`/`commit` → span with `code.stacktrace` to reveal what triggered an orphan transaction across an async hop). |
+| `osgi-otel-extension` | The agent extension. Five `InstrumentationModule`s (pkg `net.aschemann.otel.*`): `osgi-bundle-context` (`BundleContext.getService`), `eclipse-ui` (`Command.executeWithChecks` + JFace `IAction.run`/`runWithEvent`), `app-span` (**opt-in**, rule-based: `otel.app.span.rules=prefix:matcher,...` — a matcher without regex metacharacters `*+?()[]{}|^\` is a base class FQCN (matches the class and its subtypes), otherwise a class-name regex; spans named `<prefix> <RuntimeClass>.<method>` with `app.span.rule`, `code.function`, `code.namespace`, `osgi.provider.bundle`, `osgi.caller.bundle` (best-effort stack walk, `unknown` when unresolvable, off with `otel.app.span.caller-bundle=false`); enabled only when rules are set), `eclipse-events` (**opt-in**, default-off diagnostic: EMF `eNotify` + JavaBeans `firePropertyChange` → per-event spans for cascade depth/width/timing), and `hibernate-stack` (**opt-in**, default-off diagnostic: `org.hibernate.Transaction.begin`/`commit` → span with `code.stacktrace` to reveal what triggered an orphan transaction across an async hop). |
 | `osgi-otel-file-exporter` | `SpanExporter` writing OTLP-shaped JSON Lines to a file (`-Dotel.traces.exporter=file`). |
-| `osgi-otel-test-bundle` | Minimal OSGi bundle (`packaging=bundle`, Felix bundle plugin) providing `HelloService`; used by the IT. |
-| `osgi-otel-it` | Failsafe IT: starts embedded Equinox 3.15.300 with `agent-for-testing`, installs the test bundle, calls `getService`, asserts the span. |
+| `osgi-otel-test-bundle` | Minimal OSGi bundle (`packaging=bundle`, Felix bundle plugin) providing `HelloService` and the `app-span` fixtures (`api.AppServiceBase` / `internal.AppServiceImpl`, `controller.FakeController`); used by the IT. |
+| `osgi-otel-it` | Failsafe IT: starts embedded Equinox 3.15.300 with `agent-for-testing`, installs the test bundle, asserts spans — `BundleContextGetServiceIT` (the `getService` span) and `AppSpanIT` (rule-based controller/service spans, nesting, excluded methods absent). |
 
 ## Build, test, run
 
@@ -80,6 +80,11 @@ launcher-script convenience and all optional.
   `eclipse.trigger.widget.text` (**opt-in**, see below), `eclipse.selection.class`
   and `eclipse.selection.size` (workbench selection, command spans only), plus
   `eclipse.selection.label` (**opt-in**, first element's `toString`).
+  app-span: `app.span.rule`, `code.function`, `code.namespace`,
+  `osgi.provider.bundle`, `osgi.caller.bundle` (best-effort: `unknown` when the
+  direct caller's class is not loadable in the instrumented class's
+  classloader — e.g. reflective calls; omitted entirely when
+  `otel.app.span.caller-bundle=false`).
   `traces.jsonl` and the README `jq` recipes depend on these exact keys — rename
   in lockstep.
 - **Widget/selection context is read reflectively** in `CommandExecuteAdvice` /
@@ -112,6 +117,30 @@ launcher-script convenience and all optional.
 - **Filter config is read once at class-load time** (`BundleSpanFilter`, system
   properties `osgi.filter.cross-bundle-only` / `.bundle.include` / `.bundle.exclude`).
   A JVM restart is required to change it; there is no live reconfiguration.
+- **`app-span` rule registry.** `AppSpanConfig` reads `otel.app.span.rules` /
+  `otel.app.span.exclude-methods` / `otel.app.span.caller-bundle` once at
+  class-load (same pattern as `BundleSpanFilter`), from **system properties
+  only** — the advice-side copy cannot reach the agent's `ConfigProperties`,
+  so `OTEL_*` env vars and config files do not work for these.
+  The type→prefix registry is **not** shared with the type matcher: the agent
+  injects `AppSpanConfig` into the instrumented class's classloader, so the
+  advice sees a *different copy* of the class than
+  `AppSpanInstrumentation.typeMatcher()` does. Both copies parse the same
+  property and therefore agree, but each resolves (and caches) its own
+  `TYPE_TO_PREFIX` entries — the advice calls `AppSpanConfig.prefixFor()`,
+  which on a cache miss re-evaluates all rules, including a `Class.forName`
+  plus hierarchy walk for base-class rules. Keep that resolution
+  self-contained; anything that assumes shared state between matcher and
+  advice silently degrades to "no rule matched".
+  Excluded methods are filtered in the *method* matcher at transform time, so
+  they are never instrumented.
+- **`app-span` cost model.** `osgi.caller.bundle` needs a full
+  `Thread.getStackTrace()` per instrumented call (only the
+  classloader→bundle lookup is cached); `StackWalker` would be cheaper but
+  needs Java 9 and the extension targets Java 8. A regex rule also makes
+  `classLoaderOptimization()` return `any()`, so every loaded class reaches
+  the type matcher. Both are documented escape hatches, not accidents —
+  measure before enabling broad rules on a large product.
 - **Two distinct env-var namespaces.** Launcher-script variables are prefixed
   `OSGI_OTEL_` deliberately, to avoid collisions with the OTel SDK's own `OTEL_*`
   / `otel.*` properties. Keep them separate.

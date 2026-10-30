@@ -7,9 +7,34 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
+  # The sample launchers are not part of the Maven reactor, so `mvnw verify`
+  # says nothing about them. Without this job their 300+ lines of shell - the
+  # agent wiring every user starts the extension through - are the only
+  # unverified logic in the repository.
+  lint-scripts:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Check the sample launchers
+        # -S warning on purpose: style-level findings are advice, not a reason
+        # to fail the build. Raise it if the scripts ever get noisy.
+        run: |
+          if ! command -v shellcheck >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq shellcheck
+          fi
+          shellcheck --version
+          for script in samples/*.sh; do
+            bash -n "$script"
+          done
+          shellcheck -S warning samples/*.sh
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -22,11 +47,6 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
           cache: maven
-          # Generates a fresh settings.xml in the workspace with a <server id="github">
-          # (username=GITHUB_ACTOR, password=GITHUB_TOKEN, both auto-provided), so the
-          # deploy step can authenticate against GitHub Packages.
-          server-id: github
-          settings-path: ${{ github.workspace }}
 
       - name: Build and test
         run: ./mvnw -B verify
@@ -40,14 +60,3 @@ jobs:
           # summary file (not a JUnit report) that crashes dorny/test-reporter.
           path: '**/target/surefire-reports/TEST-*.xml,**/target/failsafe-reports/TEST-*.xml'
           reporter: java-junit
-
-      - name: Deploy to GitHub Packages
-        # Publish snapshots only from main pushes, not from PRs or feature branches.
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Substituted into the distributionManagement URL in the parent pom's
-          # `github` profile (https://maven.pkg.github.com/${env.GITHUB_LOGIN}/...);
-          # without it the literal ${env.GITHUB_LOGIN} breaks the deploy URL.
-          GITHUB_LOGIN: ${{ github.repository_owner }}
-        run: ./mvnw -B -s "${{ github.workspace }}/settings.xml" deploy -DskipTests

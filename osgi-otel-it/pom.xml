@@ -7,7 +7,7 @@
     <parent>
         <groupId>net.aschemann.otel</groupId>
         <artifactId>osgi-otel-parent</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
+        <version>0.1.0</version>
     </parent>
 
     <artifactId>osgi-otel-it</artifactId>
@@ -26,6 +26,12 @@
              installed nor deployed (paired with maven-jar-plugin skipIfEmpty). -->
         <maven.install.skip>true</maven.install.skip>
         <maven.deploy.skip>true</maven.deploy.skip>
+        <!-- Without a main artifact there is nothing for the `release` profile
+             to sign or to derive sources and javadoc from; gpg:sign fails
+             outright with "The project artifact has not been assembled yet". -->
+        <gpg.skip>true</gpg.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
     </properties>
 
     <dependencies>
@@ -143,6 +149,14 @@
                         -Dotel.metrics.exporter=none
                         -Dotel.logs.exporter=none
                         -Dotel.traces.exporter=none
+                        <!-- Values must stay free of cmd.exe metacharacters
+                             (| ( ) ^ & < >): on Windows the forked JVM command
+                             line goes through cmd /C and those would break it.
+                             The ctrl rule is unanchored on purpose (the regex
+                             is searched with find()); the exclude value is a
+                             full-match literal. -->
+                        -Dotel.app.span.rules=service:net.aschemann.otel.osgi.testbundle.api.AppServiceBase,ctrl:net\.aschemann\.otel\.osgi\.testbundle\.controller\..*
+                        -Dotel.app.span.exclude-methods=getVersion
                     </argLine>
                     <systemPropertyVariables>
                         <test.bundle.path>${project.build.directory}/agents/osgi-otel-test-bundle.jar</test.bundle.path>

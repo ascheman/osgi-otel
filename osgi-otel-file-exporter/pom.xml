@@ -7,7 +7,7 @@
     <parent>
         <groupId>net.aschemann.otel</groupId>
         <artifactId>osgi-otel-parent</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
+        <version>0.1.0</version>
     </parent>
 
     <artifactId>osgi-otel-file-exporter</artifactId>
@@ -17,6 +17,10 @@
         Activated via -Dotel.traces.exporter=file. File path configurable
         via -Dotel.exporter.file.path (default: traces.jsonl).
     </description>
+
+    <!-- Required by Maven Central's PomChecker: a module POM inherits no
+         <url> from its parent, and an absent one fails validation. -->
+    <url>https://github.com/ascheman/osgi-otel</url>
 
     <dependencies>
         <dependency>

@@ -1,0 +1,62 @@
+# JReleaser configuration for local releases.
+#
+# Name, version, description and the Java coordinates are taken from the POM;
+# only what Maven does not know is configured here.
+#
+#   ./mvnw -Prelease clean deploy           # build, sign, stage into target/staging-deploy
+#   ./mvnw -Prelease jreleaser:full-release # upload to Maven Central, tag, create GitHub release
+#
+# Environment: JRELEASER_GITHUB_TOKEN, JRELEASER_MAVENCENTRAL_USERNAME,
+# JRELEASER_MAVENCENTRAL_PASSWORD (Central Portal user token, not the password).
+
+project:
+  license: Apache-2.0
+  inceptionYear: '2026'
+  copyright: '2026 Gerd Aschemann'
+  authors:
+    - Gerd Aschemann
+  links:
+    homepage: https://github.com/ascheman/osgi-otel
+    bugTracker: https://github.com/ascheman/osgi-otel/issues
+  languages:
+    java:
+      # Matches maven.compiler.target in the POM: the extension runs inside
+      # hosts that may still be on a Java 8 runtime.
+      version: '8'
+      # Reactor with four modules, of which two are published.
+      multiProject: true
+
+signing:
+  # Artifacts are signed during the Maven build by maven-gpg-plugin, using the
+  # local GnuPG agent. JReleaser must not sign them a second time.
+  active: NEVER
+
+release:
+  github:
+    owner: ascheman
+    name: osgi-otel
+    tagName: '{{projectVersion}}'
+    overwrite: true
+
+deploy:
+  maven:
+    mavenCentral:
+      sonatype:
+        active: ALWAYS
+        url: https://central.sonatype.com/api/v1/publisher
+        # Upload and wait for VALIDATED, but do NOT publish. Publishing to
+        # Central is irreversible - a version can never be replaced or removed,
+        # only superseded - so it gets its own deliberate step. The default
+        # would be FULL, which uploads and publishes in one go. Publish with
+        #   JRELEASER_DEPLOY_MAVEN_MAVENCENTRAL_STAGE=PUBLISH
+        #   JRELEASER_DEPLOY_MAVEN_MAVENCENTRAL_DEPLOYMENT_ID=<id>
+        # (the system-property spelling is lowercased by Env.sysKey(), so
+        # -Djreleaser.deploy.maven.mavenCentral... does not match).
+        stage: UPLOAD
+        # The build already produced .asc signatures; applyMavenCentralRules
+        # verifies that sources, javadoc, signatures and POM metadata are all
+        # present before anything is uploaded.
+        sign: false
+        applyMavenCentralRules: true
+        stagingRepositories:
+          - target/staging-deploy
