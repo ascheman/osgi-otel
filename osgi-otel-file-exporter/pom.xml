@@ -18,6 +18,10 @@
         via -Dotel.exporter.file.path (default: traces.jsonl).
     </description>
 
+    <!-- Required by Maven Central's PomChecker: a module POM inherits no
+         <url> from its parent, and an absent one fails validation. -->
+    <url>https://github.com/ascheman/osgi-otel</url>
+
     <dependencies>
         <dependency>
             <groupId>io.opentelemetry</groupId>
