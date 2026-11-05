@@ -61,7 +61,7 @@
         <maven.compiler.release>8</maven.compiler.release>
 
         <otel.javaagent.version>2.32.0</otel.javaagent.version>
-        <otel.instrumentation.version>2.32.0</otel.instrumentation.version>
+        <otel.instrumentation.version>2.33.1</otel.instrumentation.version>
         <!-- ACCEPTED pre-release exception: OpenTelemetry publishes its javaagent
              extension-API, tooling and testing artifacts only with an -alpha suffix
              (their API is not declared stable); there is no stable-named variant and
